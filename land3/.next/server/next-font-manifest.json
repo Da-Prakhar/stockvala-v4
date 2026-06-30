@@ -1,0 +1,179 @@
+{
+  "app": {
+    "[project]/land3/app/_not-found/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/about/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts1-standard-account/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts2-mini-account/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts3-stp-account/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts4-demo-account/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts5-islamic-account/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/accounts6-corporate-account/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-1/[slug]/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-1/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-2/[slug]/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-2/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-3/[slug]/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-3/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-4/[slug]/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-4/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/blog-single/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/coming-soon/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/contact/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/courses-details/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/courses/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/error/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/faq/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/forgot-password/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/history/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/index-2/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/index-3/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/index-4/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/login/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets1-trade-forex/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets2-stock-market/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets3-commodities-market/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets4-crypto-market/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets5-futures-market/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/markets6-options-market/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/platform/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/register/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/reset-password/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/team/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ],
+    "[project]/land3/app/testimonials/page": [
+      "static/media/c47649aa31f9e140-s.p.7e59dfd6.woff2",
+      "static/media/7e4b0aeee7806d2e-s.p.51afc7c4.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pages": {},
+  "pagesUsingSizeAdjust": false
+}

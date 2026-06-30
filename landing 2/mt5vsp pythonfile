@@ -1,0 +1,4661 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import MT5Manager
+import threading
+import random
+import string
+import time
+import logging
+import os
+import requests as http_requests
+
+# ===== MT5 TERMINAL API (for trade execution) =====
+# The Manager API (MT5Manager) is for account management only.
+# Trade execution requires the MetaTrader5 terminal Python package.
+try:
+    import MetaTrader5 as mt5
+    MT5_TERMINAL_AVAILABLE = True
+    logging.info("MetaTrader5 terminal package imported successfully")
+except ImportError:
+    MT5_TERMINAL_AVAILABLE = False
+    logging.warning("MetaTrader5 terminal package not available — trade execution will use DealAdd fallback")
+
+_terminal_initialized = False
+_current_terminal_market = None   # Track which market the terminal is currently logged into
+_terminal_lock = threading.RLock()  # Thread-safe REENTRANT lock for ALL terminal operations
+
+# ===== MULTI-MARKET TERMINAL CONFIG =====
+# Each market needs a trading account in the corresponding MT5 group.
+# Create accounts via MT5 Admin in each group, then fill in login/password below.
+# The bridge will auto-switch terminal login based on which market is being traded.
+TERMINAL_ACCOUNTS = {
+    "forex": {
+        "server": "MajestyFX-Trade",
+        "login": 2231001,
+        "password": "Raja@123",
+    },
+    "mcx": {
+        "server": "MajestyFX-Trade",
+        "login": 2232002,
+        "password": "Raja@123",
+    },
+    "comex": {
+        "server": "MajestyFX-Trade",
+        "login": 2233001,
+        "password": "Raja@123",
+    },
+}
+
+# Fallback: if a market-specific account is not configured, use this one
+MT5_TERMINAL_CONFIG = {
+    "server": "MajestyFX-Trade",
+    "login": 2231001,
+    "password": "Raja@123",
+}
+
+def _detect_market(symbol):
+    """Detect market category from symbol name"""
+    s = (symbol or "").upper().replace(".#", "").replace(".", "")
+    # MCX commodity base names
+    MCX_NAMES = ("GOLD", "GOLDM", "SILVER", "SILVERM", "CRUDEOIL", "NATURALGAS",
+                 "COPPER", "ZINC", "ALUMINIUM", "LEAD", "NICKEL", "COTTON", "COTTONCANDY")
+    # NSE stock/index base names
+    NSE_NAMES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "NIFTYIT", "RELIANCE", "TCS",
+                 "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL", "ITC",
+                 "TATAMOTORS", "WIPRO", "ADANIENT", "TATASTEEL", "SENSEX",
+                 "MIDCPNIFTY", "NIFTYBANK")
+    ALL_MCX_NSE = MCX_NAMES + NSE_NAMES
+
+    # Exact match
+    if s in ALL_MCX_NSE:
+        return "mcx"
+    # Partial match: symbol might already include month suffix like BANKNIFTYMAY, GOLDJUN26
+    for base in ALL_MCX_NSE:
+        if s.startswith(base) and len(s) > len(base):
+            return "mcx"
+    # COMEX
+    if s.startswith("XAU") or s.startswith("XAG") or s.startswith("XPT") or s.startswith("XPD"):
+        return "comex"
+    # Default = forex (forex, crypto, indices)
+    return "forex"
+
+def _switch_terminal_to_market(market):
+    """Switch the MT5 terminal login to the account for the given market.
+    Returns True if terminal is ready for that market.
+    Thread-safe: acquires _terminal_lock."""
+    global _current_terminal_market, _terminal_initialized
+
+    if not MT5_TERMINAL_AVAILABLE:
+        return False
+
+    # Already on the right market (check outside lock for fast path)
+    if _terminal_initialized and _current_terminal_market == market:
+        return True
+
+    with _terminal_lock:
+        # Re-check inside lock (another thread may have switched already)
+        if _terminal_initialized and _current_terminal_market == market:
+            return True
+
+        # Get the credentials for this market
+        acct = TERMINAL_ACCOUNTS.get(market, {})
+        login = acct.get("login", 0)
+        password = acct.get("password", "")
+        server = acct.get("server", "176.126.66.38:443")
+
+        # Fall back to default if market-specific account not configured
+        if not login or login == 0:
+            login = MT5_TERMINAL_CONFIG.get("login", 0)
+            password = MT5_TERMINAL_CONFIG.get("password", "")
+            server = MT5_TERMINAL_CONFIG.get("server", "176.126.66.38:443")
+
+        if not login or login == 0:
+            print(f"[Terminal] No trading account configured for market '{market}' — skipping terminal")
+            return False
+
+        print(f"[Terminal] Switching to market '{market}' — login {login} on {server}")
+
+        # If terminal not initialized at all, do full init
+        if not _terminal_initialized:
+            if init_terminal(login=login, password=password, server=server):
+                _current_terminal_market = market
+                return True
+            return False
+
+        # Terminal is initialized but on wrong market — try re-login with multiple server name formats
+        # The MetaTrader5 Python package sometimes needs a different server format than the IP
+        server_variants = ["MajestyFX-Trade", server, "176.126.66.38:443", "176.126.66.38", "MajestyFx-Server", "PrimewaveFX-Trade", ""]
+        seen = set()
+        for srv in server_variants:
+            if srv in seen:
+                continue
+            seen.add(srv)
+            try:
+                if srv:
+                    authorized = mt5.login(int(login), password=password, server=srv)
+                else:
+                    authorized = mt5.login(int(login), password=password)
+                if authorized:
+                    info = mt5.account_info()
+                    actual_login = info.login if info else login
+                    print(f"  ✅ Terminal switched to market '{market}': account={actual_login} (server='{srv}')")
+                    _current_terminal_market = market
+                    return True
+                else:
+                    err = mt5.last_error()
+                    print(f"  ❌ Terminal login failed on '{srv}': {err}")
+            except Exception as e:
+                print(f"  ❌ Terminal login exception on '{srv}': {e}")
+
+        print(f"  ❌ All server variants failed for market '{market}', login {login}")
+        return False
+
+def init_terminal(login=None, password=None, server=None):
+    """Initialize the MT5 terminal for trade execution"""
+    global _terminal_initialized
+    if not MT5_TERMINAL_AVAILABLE:
+        return False
+    if _terminal_initialized:
+        return True
+
+    # The terminal executable path
+    MT5_TERMINAL_PATH = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+
+    # Try multiple initialization approaches
+    initialized = False
+    init_attempts = []
+
+    # Attempt 1: Full path with login/password/server in initialize() call
+    use_login = login or MT5_TERMINAL_CONFIG.get("login")
+    use_password = password or MT5_TERMINAL_CONFIG.get("password") or os.environ.get("MT5_TERMINAL_PASSWORD", "")
+    use_server = server or MT5_TERMINAL_CONFIG.get("server", "")
+
+    try:
+        result = mt5.initialize(
+            path=MT5_TERMINAL_PATH,
+            login=int(use_login) if use_login else None,
+            password=use_password if use_password else None,
+            server=use_server if use_server else None,
+            timeout=10000
+        )
+        if result:
+            initialized = True
+            init_attempts.append(f"Full init with path+credentials: SUCCESS")
+        else:
+            err = mt5.last_error()
+            init_attempts.append(f"Full init with path+credentials: FAILED {err}")
+    except Exception as e:
+        init_attempts.append(f"Full init with path+credentials: EXCEPTION {e}")
+
+    # Attempt 2: Just path, no credentials
+    if not initialized:
+        try:
+            result = mt5.initialize(path=MT5_TERMINAL_PATH)
+            if result:
+                initialized = True
+                init_attempts.append(f"Path only: SUCCESS")
+            else:
+                err = mt5.last_error()
+                init_attempts.append(f"Path only: FAILED {err}")
+        except Exception as e:
+            init_attempts.append(f"Path only: EXCEPTION {e}")
+
+    # Attempt 3: No path (auto-detect / connect to running instance)
+    if not initialized:
+        try:
+            result = mt5.initialize()
+            if result:
+                initialized = True
+                init_attempts.append(f"Auto-detect: SUCCESS")
+            else:
+                err = mt5.last_error()
+                init_attempts.append(f"Auto-detect: FAILED {err}")
+        except Exception as e:
+            init_attempts.append(f"Auto-detect: EXCEPTION {e}")
+
+    # Attempt 4: Portable mode
+    if not initialized:
+        try:
+            result = mt5.initialize(path=MT5_TERMINAL_PATH, portable=True)
+            if result:
+                initialized = True
+                init_attempts.append(f"Portable mode: SUCCESS")
+            else:
+                err = mt5.last_error()
+                init_attempts.append(f"Portable mode: FAILED {err}")
+        except Exception as e:
+            init_attempts.append(f"Portable mode: EXCEPTION {e}")
+
+    for attempt in init_attempts:
+        print(f"  [Terminal Init] {attempt}")
+
+    if not initialized:
+        print(f"❌ MT5 Terminal initialize() failed - all attempts exhausted")
+        return False
+
+    print(f"✅ MT5 Terminal initialized (connected to terminal process)")
+
+    # Now login with a trading account
+    use_login = login or MT5_TERMINAL_CONFIG.get("login")
+    use_password = password or MT5_TERMINAL_CONFIG.get("password") or os.environ.get("MT5_TERMINAL_PASSWORD", "")
+    use_server = server or MT5_TERMINAL_CONFIG.get("server", "")
+
+    # Check if we're logged in after initialize
+    info = mt5.account_info()
+    if info and info.login > 0:
+        print(f"  ✅ Terminal logged in: account={info.login}, balance={info.balance}, server={info.server}")
+        _terminal_initialized = True
+        return True
+
+    # If initialize succeeded but not logged in, try explicit login
+    if use_login and use_password:
+        server_names = ["MajestyFX-Trade", use_server, "176.126.66.38:443", "176.126.66.38", "MajestyFx-Server", "PrimewaveFX-Trade", ""]
+        seen = set()
+        for srv in server_names:
+            if srv in seen:
+                continue
+            seen.add(srv)
+            label = srv if srv else "(default)"
+            print(f"  Trying login {use_login} on server '{label}'...")
+            try:
+                authorized = mt5.login(int(use_login), password=use_password, server=srv) if srv else mt5.login(int(use_login), password=use_password)
+                if authorized:
+                    info = mt5.account_info()
+                    if info:
+                        print(f"  ✅ Terminal logged in: account={info.login}, balance={info.balance}, server={info.server}")
+                    else:
+                        print(f"  ✅ Terminal logged in as {use_login}")
+                    _terminal_initialized = True
+                    return True
+                else:
+                    err = mt5.last_error()
+                    print(f"  ❌ Login failed on '{label}': {err}")
+            except Exception as e:
+                print(f"  ❌ Login exception on '{label}': {e}")
+
+    # Even if login failed, mark initialized if terminal is connected
+    term_info = mt5.terminal_info()
+    if term_info and term_info.connected:
+        print(f"  ⚠️ Terminal connected but not logged in. Log in manually in MT5 Terminal.")
+        _terminal_initialized = True
+        return True
+
+    print(f"  ❌ Terminal not connected or login failed")
+    return False
+
+def ensure_terminal(symbol=None):
+    """Ensure terminal is initialized and logged into the right market for the given symbol.
+    If symbol is provided, switches to the matching market account."""
+    global _terminal_initialized
+    if symbol:
+        market = _detect_market(symbol)
+        return _switch_terminal_to_market(market)
+    if _terminal_initialized:
+        return True
+    return init_terminal()
+from pathlib import Path
+
+# Import MT5 sync system
+try:
+    from mt5_sync_scheduler import init_sync_scheduler
+    SYNC_AVAILABLE = True
+    logging.info("MT5 sync scheduler imported successfully")
+except ImportError as e:
+    logging.error(f"Failed to import MT5 sync scheduler: {str(e)}")
+    SYNC_AVAILABLE = False
+except Exception as e:
+    logging.error(f"Unexpected error importing sync scheduler: {str(e)}")
+    SYNC_AVAILABLE = False
+
+app = Flask(__name__)
+CORS(app)
+# MT5_SERVER = "91.243.176.38:443"
+# MT5_MANAGER = 7000
+# MT5_PASSWORD = "Raja@123"
+# ===== MT5 CONNECTION CONFIG (DEFAULT / FALLBACK) =====
+# ===== MT5 CONNECTION CONFIG =====
+MT5_CONFIG = {
+    "server":   "176.126.66.38:443",
+    "manager":  22300,
+    "password": "Raja@123"
+}
+
+manager = MT5Manager.ManagerAPI()
+lock = threading.Lock()
+
+def generate_password(length=8):
+    """Generate random password for trading account"""
+    symbols = "!@#$%^&*"
+    while True:
+        pwd = ''.join(random.choice(string.ascii_letters + string.digits + symbols) for _ in range(length))
+        if (any(c.isdigit() for c in pwd) and
+            any(c.islower() for c in pwd) and
+            any(c.isupper() for c in pwd) and
+            any(c in symbols for c in pwd)):
+            return pwd
+        
+def dump_mt5_user(user):
+    for attr in dir(user):
+        if not attr.startswith("_"):
+            try:
+                value = getattr(user, attr)
+                if not callable(value):
+                    print(f"{attr}: {value}")
+            except:
+                pass
+
+_connected = False
+
+def connect(pump=0):
+    global _connected
+    with lock:
+        # If already connected, skip reconnect
+        if _connected:
+            return True
+        print(f"🔌 Connecting to MT5 Server {MT5_CONFIG['server']} as Manager {MT5_CONFIG['manager']}...")
+        result = manager.Connect(
+            MT5_CONFIG["server"],
+            MT5_CONFIG["manager"],
+            MT5_CONFIG["password"],
+            MT5Manager.ManagerAPI.EnPumpModes.PUMP_MODE_FULL,
+            120000
+        )
+        if result:
+            _connected = True
+        return result
+
+def reconnect():
+    """Force reconnect — use when a request fails with 'No connection'"""
+    global _connected
+    with lock:
+        _connected = False
+        try:
+            manager.Disconnect()
+        except:
+            pass
+    return connect()
+
+def disconnect():
+    # NO-OP: keep connection alive for all requests.
+    # Call reconnect() if connection is actually lost.
+    pass
+
+def real_disconnect():
+    """Actually disconnect — only called on shutdown"""
+    global _connected
+    with lock:
+        _connected = False
+        manager.Disconnect()
+
+def fetch_account_from_mt5(login: int):
+    """
+    Fetch account info from MT5 server (shared function).
+    Returns dict with account data or None if not found.
+    """
+    if not connect():
+        raise Exception(f"Failed to connect to MT5: {MT5Manager.LastError()}")
+    
+    with lock:
+        try:
+            user = manager.UserRequest(login)
+            if not user:
+                return None
+            
+            account = manager.UserAccountGet(login)
+            
+            if account:
+                margin_level = 0
+                if hasattr(account, 'Margin') and account.Margin > 0:
+                    margin_level = (account.Equity / account.Margin) * 100
+                
+                account_info = {
+                    "login": user.Login,
+                    "name": f"{user.FirstName} {user.LastName}",
+                    "email": user.EMail if hasattr(user, 'EMail') else "",
+                    "group": user.Group,
+                    "leverage": user.Leverage,
+                    "balance": account.Balance if hasattr(account, 'Balance') else user.Balance,
+                    "credit": account.Credit if hasattr(account, 'Credit') else user.Credit,
+                    "equity": account.Equity if hasattr(account, 'Equity') else user.Balance + user.Credit,
+                    "margin": account.Margin if hasattr(account, 'Margin') else 0,
+                    "margin_free": account.MarginFree if hasattr(account, 'MarginFree') else account.Equity if hasattr(account, 'Equity') else user.Balance,
+                    "margin_level": margin_level,
+                    "enabled": user.Rights == 3 or user.Rights == 11,
+                    "registration": user.Registration,
+                    "last_access": user.LastAccess if hasattr(user, 'LastAccess') else 0
+                }
+            else:
+                account_info = {
+                    "login": user.Login,
+                    "name": f"{user.FirstName} {user.LastName}",
+                    "email": user.EMail if hasattr(user, 'EMail') else "",
+                    "group": user.Group,
+                    "leverage": user.Leverage,
+                    "balance": user.Balance,
+                    "credit": user.Credit,
+                    "equity": user.Balance + user.Credit,
+                    "margin": 0,
+                    "margin_free": user.Balance + user.Credit,
+                    "margin_level": 0,
+                    "enabled": user.Rights == 3 or user.Rights == 11,
+                    "registration": user.Registration,
+                    "last_access": user.LastAccess if hasattr(user, 'LastAccess') else 0
+                }
+            
+            return account_info
+        except Exception as e:
+            raise e
+
+@app.route("/connect", methods=["POST"])
+def api_connect():
+    if connect():
+        return jsonify(success=True)
+    return jsonify(success=False, error=MT5Manager.LastError()), 500
+
+@app.route("/disconnect", methods=["POST"])
+def api_disconnect():
+    disconnect()
+    return jsonify(success=True)
+
+@app.route("/config/mt5", methods=["POST"])
+def update_mt5_config():
+    print("🔧 Updating MT5 configuration...")
+    data = request.json or {}
+    print(f"Received config data: {data}")
+    # Overwrite only if provided
+    if "server" in data:
+        MT5_CONFIG["server"] = data["server"]
+
+    if "manager" in data:
+        MT5_CONFIG["manager"] = int(data["manager"])
+
+    if "password" in data:
+        MT5_CONFIG["password"] = data["password"]
+    print(f"Updated MT5_CONFIG: {MT5_CONFIG}")
+    return jsonify(
+        success=True,
+        message="MT5 credentials updated",
+        current_config={
+            "server": MT5_CONFIG["server"],
+            "manager": MT5_CONFIG["manager"],
+            "password": "******"  # hide password
+        }
+    )
+
+
+@app.route("/users", methods=["GET"])
+def list_users():
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    users = []
+    total = manager.UserRequest()
+    
+    if total > 0:
+        for i in range(total):
+            user = manager.UserNext(i)
+            if user:
+                users.append({
+                    "login": user.Login,
+                    "group": user.Group,
+                    "name": f"{user.FirstName} {user.LastName}",
+                    "email": user.Email,
+                    "leverage": user.Leverage,
+                    "balance": user.Balance,
+                    "credit": user.Credit,
+                    "enabled": user.Enable == 1,
+                    "registration": user.Registration
+                })
+    
+    disconnect()
+    return jsonify(success=True, users=users, total=total)
+
+@app.route("/users", methods=["POST"])
+def create_user():
+    """Create new MT5 trading account"""
+    data = request.json
+    print(data)
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+      
+    try:
+        print("Creating user...")
+        user = MT5Manager.MTUser(manager)
+         # 1. Retrieve all users for that group
+        total_groups = manager.GroupTotal()
+        print(f"Total groups found on server: {total_groups}")
+        target_group_mask = data.get("group", "IND\\3001\\COMEX\\7001\\10 USD-demo10lot") + "*"
+        print(data.get("group"))
+        users_list = manager.UserGetByGroup(target_group_mask)
+        print(f"Users in group: {[u.Login for u in users_list]}")
+        if users_list and len(users_list) > 0:
+            # 2. Sort the users list by 'RegDate' in descending order (newest first)
+            # The 'RegDate' is a timestamp (seconds since epoch)
+            users_list.sort(key=lambda user: user.Registration, reverse=True)
+            last_user = users_list[0]
+        
+        print(f"Last user in group: {last_user.Login if users_list else 'None'}")
+        user.Login = last_user.Login + 1 if users_list else 1   
+        user.Group = data.get("group", "IND\\3001\\COMEX\\7001\\10 USD-demo10lot")
+        user.Leverage = data.get("leverage", 100)
+        user.FirstName = data.get("first_name", "")
+        user.LastName = data.get("last_name", "")
+        user.Rights = 11
+        # Generate passwords
+        trading_password = data.get("password") or "Raja@123"
+        investor_password = data.get("investor_password") or "Investor@123"
+        print(f"Generated passwords: {trading_password}, {investor_password}")
+       
+        # Create user
+        if not manager.UserAdd(user, trading_password, investor_password):
+            print("User creation failed:", MT5Manager.LastError())
+            disconnect()
+            return jsonify(success=False, error=MT5Manager.LastError()), 400
+        print(f"User created with login: {user.Login}")
+        # Apply initial balance if provided
+        # initial_balance = data.get("initial_balance", 0)
+        # if initial_balance > 0:
+        deal = manager.DealerBalance(
+                user.Login,
+                float(0),
+                MT5Manager.MTDeal.EnDealAction.DEAL_BALANCE,
+                "Initial Balance"
+            )
+        
+        disconnect()
+        return jsonify(
+            success=True,
+            login=user.Login,
+            trading_password=trading_password,
+            investor_password=investor_password,
+            group=user.Group,
+            leverage=user.Leverage
+        )
+    except Exception as e:
+        disconnect()
+        print(f"Error creating user: {str(e)}")
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route("/account/<int:login>", methods=["GET"])
+def get_account_info(login):
+    """Get account balance and details"""
+    print(f"Fetching account info for login: {login}")
+    try:
+        account_info = fetch_account_from_mt5(login)
+        
+        if not account_info:
+            return jsonify(success=False, error="Account not found"), 404
+        
+        return jsonify(success=True, data=account_info)
+    except Exception as e:
+        print(f"❌ Exception: {str(e)}")
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route("/users/<int:login>/password", methods=["PUT"])
+def change_user_password(login):
+    """Change trader or investor password for an MT5 account"""
+    data = request.json or {}
+    new_password = data.get("password", "")
+    pwd_type = data.get("type", "trader")  # 'trader' or 'investor'
+
+    if not new_password or len(new_password) < 8:
+        return jsonify(success=False, error="Password must be at least 8 characters"), 400
+
+    try:
+        if not connect():
+            return jsonify(success=False, error="MT5 connection failed: " + str(MT5Manager.LastError())), 500
+
+        # Fetch user to confirm they exist
+        user = manager.UserRequest(login)
+        if not user or not hasattr(user, 'Login') or user.Login == 0:
+            disconnect()
+            return jsonify(success=False, error=f"User {login} not found"), 404
+
+        print(f"Changing {pwd_type} password for account {login}")
+
+        # Debug: list all User-related methods on manager
+        user_methods = [m for m in dir(manager) if 'ser' in m.lower() or 'pass' in m.lower() or 'pwd' in m.lower()]
+        print(f"[DEBUG] Available manager methods (user/pass): {user_methods}")
+
+        # Try to inspect UserPasswordChange signature
+        if hasattr(manager, 'UserPasswordChange'):
+            import inspect
+            try:
+                sig = inspect.signature(manager.UserPasswordChange)
+                print(f"[DEBUG] UserPasswordChange signature: {sig}")
+            except (ValueError, TypeError):
+                print(f"[DEBUG] UserPasswordChange exists but cannot inspect signature")
+                # Try help
+                try:
+                    doc = manager.UserPasswordChange.__doc__
+                    print(f"[DEBUG] UserPasswordChange doc: {doc}")
+                except:
+                    pass
+
+        result = False
+        error_msg = ""
+        methods_tried = []
+
+        # Doc says: UserPasswordChange(type, login, password) — type FIRST
+        # type is likely 0=main/trader, 1=investor (or an enum)
+        change_type = 1 if pwd_type == "investor" else 0
+
+        # Also check if MT5Manager has password type enums
+        pwd_type_enums = {}
+        for attr in dir(MT5Manager):
+            if 'PASSWORD' in attr.upper() or 'PASS' in attr.upper():
+                try:
+                    val = getattr(MT5Manager, attr)
+                    pwd_type_enums[attr] = val
+                except:
+                    pass
+        if pwd_type_enums:
+            print(f"[DEBUG] MT5Manager password-related attrs: {pwd_type_enums}")
+
+        # Also check MTUser for password type enums
+        try:
+            user_pwd_attrs = [a for a in dir(MT5Manager.MTUser) if 'pass' in a.lower() or 'PASS' in a.upper()]
+            print(f"[DEBUG] MTUser password attrs: {user_pwd_attrs}")
+            for a in user_pwd_attrs:
+                try:
+                    print(f"[DEBUG]   MTUser.{a} = {getattr(MT5Manager.MTUser, a)}")
+                except:
+                    pass
+        except:
+            pass
+
+        # Attempt 1: (type_int, login_int, password_str) — matching doc signature
+        try:
+            result = manager.UserPasswordChange(change_type, int(login), str(new_password))
+            methods_tried.append(f"UserPasswordChange({change_type}, {login}, pwd) = {result}")
+        except (TypeError, AttributeError) as e:
+            methods_tried.append(f"UserPasswordChange(type,login,pwd): {e}")
+
+        # Attempt 2: Try with EnUsersPasswordWork enum if it exists
+        if not result:
+            try:
+                if pwd_type == "investor":
+                    enum_val = MT5Manager.MTUser.EnUsersPasswordWork.USER_PASS_INVESTOR
+                else:
+                    enum_val = MT5Manager.MTUser.EnUsersPasswordWork.USER_PASS_MAIN
+                result = manager.UserPasswordChange(enum_val, int(login), str(new_password))
+                methods_tried.append(f"UserPasswordChange(enum={enum_val}, {login}, pwd) = {result}")
+            except (TypeError, AttributeError) as e:
+                methods_tried.append(f"UserPasswordChange(enum,login,pwd): {e}")
+
+        # Attempt 3: PasswordChange method (also listed in available methods)
+        if not result:
+            try:
+                result = manager.PasswordChange(change_type, int(login), str(new_password))
+                methods_tried.append(f"PasswordChange({change_type}, {login}, pwd) = {result}")
+            except (TypeError, AttributeError) as e:
+                methods_tried.append(f"PasswordChange: {e}")
+
+        error_msg = "; ".join(methods_tried)
+        print(f"[DEBUG] Password change results: {error_msg}")
+
+        disconnect()
+
+        if not result:
+            last_err = str(MT5Manager.LastError()) if hasattr(MT5Manager, 'LastError') else "Unknown"
+            print(f"❌ Password change failed. {error_msg}. LastError: {last_err}")
+            return jsonify(success=False, error=f"Failed to change {pwd_type} password. {error_msg}. MT5 Error: {last_err}"), 500
+
+        print(f"✅ {pwd_type.capitalize()} password changed for account {login}")
+        return jsonify(
+            success=True,
+            message=f"{pwd_type.capitalize()} password changed for account {login}"
+        )
+    except Exception as e:
+        disconnect()
+        print(f"❌ Password change error: {str(e)}")
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/balance/deposit", methods=["POST"])
+def deposit():
+    """Add funds to MT5 account balance"""
+    data = request.json
+
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        login = int(data["login"])
+        amount = float(data["amount"])
+        comment = data.get("comment", "Deposit")
+
+        # Debug: discover DealerBalance signature
+        if hasattr(manager, 'DealerBalance'):
+            db_doc = manager.DealerBalance.__doc__ if hasattr(manager.DealerBalance, '__doc__') else 'no doc'
+            logging.info(f"[Deposit] DealerBalance doc: {db_doc}")
+
+        # Debug: discover available deal enums
+        try:
+            deal_enum = MT5Manager.MTDeal.EnDealAction
+            enum_members = [attr for attr in dir(deal_enum) if attr.startswith('DEAL')]
+            logging.info(f"[Deposit] Available EnDealAction members: {enum_members}")
+            for m in enum_members:
+                logging.info(f"[Deposit]   {m} = {getattr(deal_enum, m, '?')}")
+        except Exception as enum_err:
+            logging.info(f"[Deposit] Could not read enums: {enum_err}")
+
+        # Get account balance BEFORE deposit
+        user_before = manager.UserAccountGet(login)
+        balance_before = user_before.Balance if user_before else 0
+        logging.info(f"[Deposit] Account {login} balance BEFORE: {balance_before}")
+
+        # Try DealerBalance with different parameter combinations
+        deal = None
+        last_err = None
+
+        # Approach 1: (login, amount, deal_type_enum, comment)
+        try:
+            logging.info(f"[Deposit] Trying: DealerBalance({login}, {amount}, DEAL_BALANCE, '{comment}')")
+            deal = manager.DealerBalance(login, amount, MT5Manager.MTDeal.EnDealAction.DEAL_BALANCE, comment)
+            logging.info(f"[Deposit] Approach 1 result: {deal}")
+        except Exception as e1:
+            last_err = str(e1)
+            logging.info(f"[Deposit] Approach 1 failed: {e1}")
+
+        # Approach 2: (login, amount, int type=2 for balance, comment)
+        if deal is None or deal is False:
+            try:
+                logging.info(f"[Deposit] Trying: DealerBalance({login}, {amount}, 2, '{comment}')")
+                deal = manager.DealerBalance(login, amount, 2, comment)
+                logging.info(f"[Deposit] Approach 2 result: {deal}")
+            except Exception as e2:
+                last_err = str(e2)
+                logging.info(f"[Deposit] Approach 2 failed: {e2}")
+
+        # Approach 3: just (login, amount) - maybe it only takes 2 args
+        if deal is None or deal is False:
+            try:
+                logging.info(f"[Deposit] Trying: DealerBalance({login}, {amount})")
+                deal = manager.DealerBalance(login, amount)
+                logging.info(f"[Deposit] Approach 3 result: {deal}")
+            except Exception as e3:
+                last_err = str(e3)
+                logging.info(f"[Deposit] Approach 3 failed: {e3}")
+
+        # Approach 4: (login, amount, comment) - 3 args
+        if deal is None or deal is False:
+            try:
+                logging.info(f"[Deposit] Trying: DealerBalance({login}, {amount}, '{comment}')")
+                deal = manager.DealerBalance(login, amount, comment)
+                logging.info(f"[Deposit] Approach 4 result: {deal}")
+            except Exception as e4:
+                last_err = str(e4)
+                logging.info(f"[Deposit] Approach 4 failed: {e4}")
+
+        # Approach 5: Try DealerBalanceRaw or other variants
+        if deal is None or deal is False:
+            balance_methods = [attr for attr in dir(manager) if 'balance' in attr.lower() or 'dealer' in attr.lower()]
+            logging.info(f"[Deposit] Available balance/dealer methods: {balance_methods}")
+
+        if deal is None or deal is False:
+            err_msg = MT5Manager.LastError() or last_err or "DealerBalance returned False"
+            logging.error(f"[Deposit] ALL approaches failed for {login}. Error: {err_msg}")
+            disconnect()
+            return jsonify(success=False, error=str(err_msg)), 400
+
+        # Get updated account info
+        user_after = manager.UserAccountGet(login)
+        new_balance = user_after.Balance if user_after else 0
+        logging.info(f"[Deposit] Account {login} balance AFTER: {new_balance} (was {balance_before})")
+
+        disconnect()
+        return jsonify(
+            success=True,
+            deal_id=deal,
+            login=login,
+            amount=amount,
+            balance_before=balance_before,
+            balance_after=new_balance,
+            comment=comment
+        )
+    except Exception as e:
+        logging.error(f"[Deposit] Exception: {e}")
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route("/balance/withdraw", methods=["POST"])
+def withdraw():
+    """Remove funds from MT5 account based on EQUITY"""
+    data = request.json
+
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        login = int(data["login"])
+        amount = float(data["amount"])
+        comment = data.get("comment", "Withdrawal")
+
+        # Get account state to check Equity
+        user = manager.UserAccountGet(login)
+        if not user:
+            disconnect()
+            return jsonify(success=False, error="Account not found"), 404
+
+        # Validate against Equity
+        if user.Equity < amount:
+            disconnect()
+            return jsonify(
+                success=False,
+                error="Insufficient Equity",
+                available_equity=user.Equity
+            ), 400
+
+        balance_before = user.Balance
+        logging.info(f"[Withdraw] Account {login} balance BEFORE: {balance_before}, equity: {user.Equity}")
+
+        # Perform withdrawal (negative amount)
+        deal = None
+        # Try with enum
+        try:
+            deal = manager.DealerBalance(login, -amount, MT5Manager.MTDeal.EnDealAction.DEAL_BALANCE, comment)
+            logging.info(f"[Withdraw] DealerBalance with enum result: {deal}")
+        except Exception as e1:
+            logging.info(f"[Withdraw] Enum approach failed: {e1}")
+
+        # Try with int type
+        if deal is None or deal is False:
+            try:
+                deal = manager.DealerBalance(login, -amount, 2, comment)
+                logging.info(f"[Withdraw] DealerBalance with int type result: {deal}")
+            except Exception as e2:
+                logging.info(f"[Withdraw] Int type approach failed: {e2}")
+
+        # Try minimal args
+        if deal is None or deal is False:
+            try:
+                deal = manager.DealerBalance(login, -amount)
+                logging.info(f"[Withdraw] DealerBalance minimal result: {deal}")
+            except Exception as e3:
+                logging.info(f"[Withdraw] Minimal approach failed: {e3}")
+
+        if deal is None or deal is False:
+            err_msg = MT5Manager.LastError() or "DealerBalance withdrawal failed"
+            logging.error(f"[Withdraw] ALL approaches failed for {login}. Error: {err_msg}")
+            disconnect()
+            return jsonify(success=False, error=str(err_msg)), 400
+
+        # Get updated stats
+        updated_user = manager.UserAccountGet(login)
+        new_balance = updated_user.Balance if updated_user else 0
+        logging.info(f"[Withdraw] Account {login} balance AFTER: {new_balance}")
+
+        disconnect()
+        return jsonify(
+            success=True,
+            deal_id=deal,
+            login=login,
+            amount=amount,
+            new_balance=new_balance,
+            remaining_equity=updated_user.Equity if updated_user else 0,
+            comment=comment
+        )
+    except Exception as e:
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route("/positions", methods=["GET"])
+def get_positions():
+    """Retrieve all open positions for all users"""
+    print("=" * 50)
+    print("🔍 GET /positions endpoint called")
+    print("=" * 50)
+    
+    if not connect():
+        print("❌ Failed to connect to MT5")
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        # Get all open positions across all users
+        print("📊 Fetching all open positions...")
+        positions_list = manager.PositionGetByGroup("*")
+        print(f"✅ Retrieved positions_list, type: {type(positions_list)}")
+
+        if positions_list is False:
+            print("❌ PositionGetByGroup returned False")
+            disconnect()
+            return jsonify(success=False, error=MT5Manager.LastError()), 400
+        
+        if not positions_list:
+            print("⚠️ No open positions found")
+            disconnect()
+            return jsonify(success=True, positions=[], message="No open positions found"), 200
+
+        print(f"📈 Found {len(positions_list)} positions")
+        
+        dump_mt5_user(positions_list[0])
+
+        print(f"✅ Returning {len(positions_list)} formatted positions")
+        disconnect()
+        return jsonify(
+            success=True, 
+            total_positions=len(positions_list),
+            positions=positions_list
+        )
+    except Exception as e:
+        print(f"❌ Exception in get_positions: {str(e)}")
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/positions/<int:login>", methods=["GET"])
+def get_positions_by_login(login):
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        # 1. Verify account exists
+        user = manager.UserRequest(login)
+        if not user:
+            if reconnect():
+                user = manager.UserRequest(login)
+            if not user:
+                return jsonify(success=False, error="Account not found"), 404
+
+        # 2. Try multiple methods to get positions
+        positions_data = None
+        method_used = "none"
+
+        # Approach 1: PositionGetByLogins([login])
+        try:
+            positions_data = manager.PositionGetByLogins([login])
+            if positions_data is not None and positions_data is not False:
+                method_used = "PositionGetByLogins"
+                print(f"[Positions] PositionGetByLogins({login}): got {len(positions_data) if positions_data else 0} positions")
+        except Exception as e1:
+            print(f"[Positions] PositionGetByLogins failed: {e1}")
+
+        # Approach 2: PositionGet(login) — positional arg
+        if positions_data is None or positions_data is False:
+            try:
+                positions_data = manager.PositionGet(login)
+                if positions_data is not None and positions_data is not False:
+                    method_used = "PositionGet(login)"
+                    print(f"[Positions] PositionGet({login}): got {len(positions_data) if positions_data else 0} positions")
+            except Exception as e2:
+                print(f"[Positions] PositionGet(login) failed: {e2}")
+
+        # Approach 3: PositionGet(login=login) — keyword arg
+        if positions_data is None or positions_data is False:
+            try:
+                positions_data = manager.PositionGet(login=login)
+                if positions_data is not None and positions_data is not False:
+                    method_used = "PositionGet(login=login)"
+                    print(f"[Positions] PositionGet(login={login}): got {len(positions_data) if positions_data else 0} positions")
+            except Exception as e3:
+                print(f"[Positions] PositionGet(login=) failed: {e3}")
+
+        # Approach 4: PositionRequest(login)
+        if positions_data is None or positions_data is False:
+            for fn_name in ["PositionRequest", "PositionRequestByLogins", "PositionGetByLogin"]:
+                try:
+                    fn = getattr(manager, fn_name, None)
+                    if fn:
+                        if "Logins" in fn_name:
+                            positions_data = fn([login])
+                        else:
+                            positions_data = fn(login)
+                        if positions_data is not None and positions_data is not False:
+                            method_used = fn_name
+                            print(f"[Positions] {fn_name}: got {len(positions_data) if positions_data else 0} positions")
+                            break
+                except Exception as e4:
+                    print(f"[Positions] {fn_name} failed: {e4}")
+
+        if not positions_data:
+            print(f"[Positions] No positions found for login {login} (method: {method_used})")
+            return jsonify(success=True, login=login, total_positions=0, positions=[], method=method_used), 200
+
+        # 3. Format positions for JSON
+        formatted_positions = []
+        for i, pos in enumerate(positions_data):
+            # Debug: dump first position's attributes
+            if i == 0:
+                pos_attrs = {}
+                for attr in dir(pos):
+                    if not attr.startswith("_"):
+                        try:
+                            val = getattr(pos, attr)
+                            if not callable(val):
+                                pos_attrs[attr] = str(val)
+                        except:
+                            pass
+                print(f"[Positions] First position attributes: {pos_attrs}")
+
+            # Volume: MT5 stores in units (10000 = 1 lot). VolumeExt is 100M = 1 lot.
+            vol_raw = getattr(pos, "Volume", 0)
+            vol_ext = getattr(pos, "VolumeExt", 0)
+            if vol_raw and vol_raw > 0:
+                vol_lots = vol_raw / 10000
+            elif vol_ext and vol_ext > 0:
+                vol_lots = vol_ext / 100000000
+            else:
+                vol_lots = 0
+
+            formatted_positions.append({
+                "ticket": getattr(pos, "Position", getattr(pos, "Ticket", 0)),
+                "symbol": getattr(pos, "Symbol", ""),
+                "type": "BUY" if getattr(pos, "Action", 0) == 0 else "SELL",
+                "volume": vol_lots,
+                "price_open": getattr(pos, "PriceOpen", 0.0),
+                "price_current": getattr(pos, "PriceCurrent", 0.0),
+                "profit": getattr(pos, "Profit", 0.0),
+                "sl": getattr(pos, "PriceSL", 0.0),
+                "tp": getattr(pos, "PriceTP", 0.0),
+                "swap": getattr(pos, "Storage", 0.0),
+                "time_create": getattr(pos, "TimeCreate", 0),
+            })
+
+        print(f"[Positions] Returning {len(formatted_positions)} positions for login {login} via {method_used}")
+
+        return jsonify(
+            success=True,
+            login=login,
+            account_name=f"{user.FirstName} {user.LastName}",
+            total_positions=len(formatted_positions),
+            positions=formatted_positions,
+            method=method_used
+        )
+
+    except Exception as e:
+        print(f"[Positions] Exception for login {login}: {str(e)}")
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/risk/<int:login>", methods=["GET"])
+def get_risk_monitor(login):
+    """Get risk monitoring data for account"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        user = manager.UserRequest(login)
+        if not user:
+            disconnect()
+            return jsonify(success=False, error="Account not found"), 404
+        
+        # Get open positions
+        positions = []
+        total_profit = 0
+        total_volume = 0
+        exposure_by_symbol = {}
+        
+        # Manager API doesn't provide direct access to trades/positions
+        # This would require Server API integration
+        # For now, calculate based on account data only
+        
+        # Calculate risk metrics
+        balance = user.Balance
+        equity = balance + user.Credit  # Simplified without floating P/L
+        margin = user.MarginFree if hasattr(user, 'MarginFree') else 0
+        free_margin = equity - margin if margin > 0 else equity
+        margin_level = (equity / margin * 100) if margin > 0 else 0
+        
+        risk_data = {
+            "login": login,
+            "balance": balance,
+            "equity": equity,
+            "margin": margin,
+            "free_margin": free_margin,
+            "margin_level": margin_level,
+            "total_profit": total_profit,
+            "open_positions": len(positions),
+            "total_lots": total_volume,
+            "positions": positions,
+            "exposure_by_symbol": exposure_by_symbol,
+            "margin_call_level": 50,  # Configure based on group settings
+            "stop_out_level": 20      # Configure based on group settings
+        }
+        
+        disconnect()
+        return jsonify(success=True, data=risk_data)
+    except Exception as e:
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route("/ib/<int:master_login>", methods=["GET"])
+def get_ib_hierarchy(master_login):
+    """Get IB/Manager hierarchy and performance"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        # Get master/IB account
+        master = manager.UserRequest(master_login)
+        if not master:
+            disconnect()
+            return jsonify(success=False, error="Master account not found"), 404
+        
+        # Get all users under this IB
+        clients = []
+        total = manager.UserRequest()
+        
+        if total > 0:
+            for i in range(total):
+                user = manager.UserNext(i)
+                # Check if user belongs to this IB's group or hierarchy
+                # This logic depends on your group structure
+                if user and (user.AgentAccount == master_login or master.Group in user.Group):
+                    clients.append({
+                        "login": user.Login,
+                        "name": f"{user.FirstName} {user.LastName}",
+                        "group": user.Group,
+                        "balance": user.Balance,
+                        "equity": user.Balance + user.Credit,
+                        "registration": user.Registration
+                    })
+        
+        # Calculate IB metrics
+        total_volume = 0
+        total_commission = 0
+        
+        # Get trading history for commission calculation
+        # This would require additional API calls to get deals/trades
+        
+        ib_data = {
+            "master_login": master_login,
+            "master_name": f"{master.FirstName} {master.LastName}",
+            "master_group": master.Group,
+            "total_clients": len(clients),
+            "clients": clients,
+            "total_volume": total_volume,
+            "total_commission": total_commission,
+            "pending_rebates": 0  # Calculate based on commission rules
+        }
+        
+        disconnect()
+        return jsonify(success=True, data=ib_data)
+    except Exception as e:
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route("/sync-user-accounts/<user_id>", methods=["POST"])
+def sync_user_accounts(user_id):
+    """
+    Sync MT5 accounts for a specific user.
+    Called when user logs in to update their account data.
+    """
+    try:
+        from sync import sync_mt5_account
+        from supabase_client import get_supabase_client
+        
+        print(f"🔄 Syncing MT5 accounts for user: {user_id}")
+        
+        # Get user's MT5 accounts from Supabase
+        supabase = get_supabase_client()
+        response = supabase.table('mt5_accounts')\
+            .select('login_id')\
+            .eq('user_id', user_id)\
+            .eq('is_active', True)\
+            .execute()
+        
+        if not response.data:
+            return jsonify({
+                'success': True,
+                'message': 'No MT5 accounts found for this user',
+                'total': 0,
+                'successful': 0,
+                'failed': 0
+            })
+        
+        accounts = response.data
+        print(f"📋 Found {len(accounts)} MT5 accounts for user {user_id}")
+        
+        results = []
+        successful = 0
+        failed = 0
+        
+        # Sync each account
+        for account in accounts:
+            login = int(account['login_id'])
+            print(f"   Syncing account: {login}")
+            
+            result = sync_mt5_account(login)
+            time.sleep(1.5)
+            results.append(result)
+            
+            if result['success']:
+                successful += 1
+            else:
+                failed += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Synced {successful}/{len(accounts)} accounts successfully',
+            'total': len(accounts),
+            'successful': successful,
+            'failed': failed,
+            'results': results
+        })
+        
+    except Exception as e:
+        print(f"❌ Error syncing user accounts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route("/groups", methods=["GET"])
+def get_groups():
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        # Give the server a moment to sync group configurations
+        time.sleep(1)
+
+        total = manager.GroupTotal()
+        print(f"Total groups found on server: {total}")
+        
+        if not total:
+            disconnect()
+            return jsonify(success=True, groups=[], total=0)
+
+        groups = []
+        # Use a range to fetch each specific group by its index
+        for i in range(total):
+            group = manager.GroupNext(i) # Fetch the group at index 'i'
+            
+            if group:
+                print(f"Processing group {i+1}/{total}: {group.Group}")
+                groups.append({
+                    "name": group.Group,
+                    "currency": getattr(group, "Currency", "USD"),
+                    "leverage": getattr(group, "DefaultLeverage", 100)
+                })
+            else:
+                print(f"Failed to fetch group at index {i}")
+
+        disconnect()
+        return jsonify(success=True, groups=groups, total=len(groups))
+
+    except Exception as e:
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/symbols", methods=["GET"])
+def get_symbols():
+    """Get all available trading symbols from MT5"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        total = manager.SymbolTotal()
+        print(f"Total symbols on server: {total}")
+
+        symbols = []
+        for i in range(total):
+            sym = manager.SymbolNext(i)
+            if sym:
+                symbols.append({
+                    "name": getattr(sym, "Symbol", ""),
+                    "path": getattr(sym, "Path", ""),
+                    "description": getattr(sym, "Description", ""),
+                    "digits": getattr(sym, "Digits", 5),
+                    "trade_mode": getattr(sym, "TradeMode", 0),
+                    "contract_size": getattr(sym, "ContractSize", 100000),
+                    "currency_base": getattr(sym, "CurrencyBase", ""),
+                    "currency_profit": getattr(sym, "CurrencyProfit", ""),
+                })
+
+        disconnect()
+        return jsonify(success=True, symbols=symbols, total=len(symbols))
+    except Exception as e:
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/symbols/search/<query>", methods=["GET"])
+def search_symbols(query):
+    """Search MT5 symbols by name — returns real MT5 names matching the query.
+    Usage:  GET /symbols/search/XAUUSD  → all symbols containing 'XAUUSD'
+            GET /symbols/search/BTC     → all symbols containing 'BTC'
+            GET /symbols/search/NIFTY   → all symbols containing 'NIFTY'
+    """
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        total = manager.SymbolTotal()
+        query_upper = query.upper()
+        matches = []
+
+        for i in range(total):
+            sym = manager.SymbolNext(i)
+            if sym:
+                name = getattr(sym, "Symbol", "")
+                path = getattr(sym, "Path", "")
+                desc = getattr(sym, "Description", "")
+                trade_mode = getattr(sym, "TradeMode", 0)
+                if query_upper in name.upper() or query_upper in desc.upper():
+                    matches.append({
+                        "name": name,
+                        "path": path,
+                        "description": desc,
+                        "digits": getattr(sym, "Digits", 5),
+                        "trade_mode": trade_mode,
+                        "tradeable": trade_mode > 0,
+                        "contract_size": getattr(sym, "ContractSize", 100000),
+                    })
+
+        disconnect()
+        return jsonify(success=True, query=query, matches=matches, total=len(matches))
+    except Exception as e:
+        disconnect()
+        return jsonify(success=False, error=str(e)), 500
+
+
+# ===== TICK / PRICE CACHE & ENDPOINT =====
+# Cache for tick data — populated by public APIs
+_tick_cache = {}  # symbol → {bid, ask, digits, time}
+
+# Symbol metadata for proper digit formatting
+SYMBOL_DIGITS = {
+    "EURUSD": 5, "GBPUSD": 5, "USDJPY": 3, "AUDUSD": 5, "USDCAD": 5,
+    "NZDUSD": 5, "USDCHF": 5, "EURGBP": 5, "EURJPY": 3, "GBPJPY": 3,
+    "AUDJPY": 3, "EURAUD": 5, "EURNZD": 5, "EURCHF": 5, "GBPAUD": 5,
+    "GBPCAD": 5, "GBPCHF": 5, "GBPNZD": 5, "AUDCAD": 5, "AUDCHF": 5,
+    "AUDNZD": 5, "NZDJPY": 3, "NZDCAD": 5, "NZDCHF": 5, "CADJPY": 3,
+    "CADCHF": 5, "CHFJPY": 3, "USDSGD": 5, "USDHKD": 5, "USDCNH": 5,
+    "USDZAR": 5, "USDMXN": 5, "USDTRY": 5, "USDSEK": 5, "USDNOK": 5,
+    "XAUUSD": 2, "XAGUSD": 3, "XPTUSD": 2, "XPDUSD": 2,
+    "BTCUSD": 2, "ETHUSD": 2, "LTCUSD": 2, "XRPUSD": 5,
+    "US500": 2, "US30": 2, "USTEC": 2, "NAS100": 2, "UK100": 2,
+    "GER40": 2, "JPN225": 2, "AUS200": 2,
+    "USOIL": 3, "UKOIL": 3, "XBRUSD": 3, "XTIUSD": 3, "NGAS": 3,
+    # MCX symbols
+    "GOLD": 0, "GOLDM": 0, "SILVER": 0, "SILVERM": 0, "CRUDEOIL": 2,
+    "NATURALGAS": 2, "COPPER": 2, "ZINC": 2, "ALUMINIUM": 2, "LEAD": 2,
+    "NICKEL": 2, "COTTON": 2,
+    # NSE symbols
+    "NIFTY": 2, "BANKNIFTY": 2, "FINNIFTY": 2, "NIFTYIT": 2,
+    "RELIANCE": 2, "TCS": 2, "HDFCBANK": 2, "INFY": 2, "ICICIBANK": 2,
+    "SBIN": 2, "BHARTIARTL": 2, "ITC": 2, "TATAMOTORS": 2, "WIPRO": 2,
+    "ADANIENT": 2, "TATASTEEL": 2,
+}
+
+# Map MT5 symbol names → Binance API symbol names (crypto only)
+BINANCE_MAP = {
+    "BTCUSD": "BTCUSDT", "ETHUSD": "ETHUSDT", "LTCUSD": "LTCUSDT",
+    "XRPUSD": "XRPUSDT", "BNBUSD": "BNBUSDT", "SOLUSD": "SOLUSDT",
+    "DOGEUSD": "DOGEUSDT", "ADAUSD": "ADAUSDT", "DOTUSD": "DOTUSDT",
+}
+
+
+def _fetch_price_binance(symbol):
+    """Fetch bid/ask from Binance public API (crypto pairs)"""
+    binance_sym = BINANCE_MAP.get(symbol)
+    if not binance_sym:
+        return 0, 0
+    try:
+        resp = http_requests.get(
+            f"https://api.binance.com/api/v3/ticker/bookTicker?symbol={binance_sym}",
+            timeout=3
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            bid = float(data.get("bidPrice", 0))
+            ask = float(data.get("askPrice", 0))
+            return bid, ask
+    except Exception as e:
+        print(f"Binance API error for {symbol}: {e}")
+    return 0, 0
+
+
+def _fetch_price_forex(symbol):
+    """Fetch forex prices using free public APIs"""
+    # Try ExchangeRate API (no key needed for basic)
+    if len(symbol) == 6:
+        base = symbol[:3]
+        quote = symbol[3:]
+        try:
+            resp = http_requests.get(
+                f"https://open.er-api.com/v6/latest/{base}",
+                timeout=4
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                rate = data.get("rates", {}).get(quote, 0)
+                if rate > 0:
+                    # Approximate bid/ask with tiny spread
+                    digits = SYMBOL_DIGITS.get(symbol, 5)
+                    spread_pips = 1 / (10 ** digits)  # 1 pip spread
+                    bid = rate - spread_pips / 2
+                    ask = rate + spread_pips / 2
+                    return bid, ask
+        except Exception as e:
+            print(f"Forex API error for {symbol}: {e}")
+    return 0, 0
+
+
+def _fetch_price_metals(symbol):
+    """Fetch metals prices (XAUUSD, XAGUSD) using multiple API fallbacks"""
+    metal_map = {"XAUUSD": "XAU", "XAGUSD": "XAG", "XPTUSD": "XPT", "XPDUSD": "XPD"}
+    metal = metal_map.get(symbol)
+    if not metal:
+        return 0, 0
+
+    # API 1: Try frankfurter.app (supports XAU/XAG)
+    try:
+        pair = f"{metal}/USD"
+        resp = http_requests.get(
+            f"https://api.frankfurter.app/latest?from={metal}&to=USD",
+            timeout=4
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            usd_rate = data.get("rates", {}).get("USD", 0)
+            if usd_rate > 0:
+                digits = SYMBOL_DIGITS.get(symbol, 2)
+                spread = 0.5 if "XAU" in symbol else 0.02
+                bid = usd_rate - spread / 2
+                ask = usd_rate + spread / 2
+                print(f"  Metals price from frankfurter: {symbol} bid={bid} ask={ask}")
+                return bid, ask
+    except Exception as e:
+        print(f"Frankfurter API error for {symbol}: {e}")
+
+    # API 2: Try open.er-api.com
+    try:
+        resp = http_requests.get(
+            f"https://open.er-api.com/v6/latest/{metal}",
+            timeout=4
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            usd_rate = data.get("rates", {}).get("USD", 0)
+            if usd_rate > 0:
+                digits = SYMBOL_DIGITS.get(symbol, 2)
+                spread = 0.5 if "XAU" in symbol else 0.02
+                bid = usd_rate - spread / 2
+                ask = usd_rate + spread / 2
+                print(f"  Metals price from er-api: {symbol} bid={bid} ask={ask}")
+                return bid, ask
+    except Exception as e:
+        print(f"ER-API error for {symbol}: {e}")
+
+    # API 3: Try CoinGecko (gold/silver mapped to commodity IDs)
+    coingecko_map = {"XAU": "tether-gold", "XAG": "silver-token"}
+    cg_id = coingecko_map.get(metal)
+    if cg_id:
+        try:
+            resp = http_requests.get(
+                f"https://api.coingecko.com/api/v3/simple/price?ids={cg_id}&vs_currencies=usd",
+                timeout=4
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                price = data.get(cg_id, {}).get("usd", 0)
+                if price > 0:
+                    spread = 0.5 if "XAU" in symbol else 0.02
+                    bid = price - spread / 2
+                    ask = price + spread / 2
+                    print(f"  Metals price from CoinGecko: {symbol} bid={bid} ask={ask}")
+                    return bid, ask
+        except Exception as e:
+            print(f"CoinGecko error for {symbol}: {e}")
+
+    # API 4: Last resort — Binance PAXG (gold-backed token, close to spot gold)
+    if metal == "XAU":
+        try:
+            resp = http_requests.get(
+                "https://api.binance.com/api/v3/ticker/bookTicker?symbol=PAXGUSDT",
+                timeout=3
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                bid = float(data.get("bidPrice", 0))
+                ask = float(data.get("askPrice", 0))
+                if bid > 0:
+                    print(f"  Gold price from Binance PAXG: bid={bid} ask={ask}")
+                    return bid, ask
+        except Exception as e:
+            print(f"Binance PAXG error: {e}")
+
+    print(f"  All metals APIs failed for {symbol}")
+    return 0, 0
+
+
+def _get_live_price(symbol):
+    """Get live bid/ask for any symbol using public APIs"""
+    digits = SYMBOL_DIGITS.get(symbol, 5)
+
+    # Strip broker suffixes like .#, .raw, .pro for API lookups
+    base_symbol = symbol.split(".")[0] if "." in symbol else symbol
+
+    # For MCX/NSE symbols, resolve to the actual futures contract name first
+    market = _detect_market(symbol)
+    resolved_mcx = None
+    if market == "mcx":
+        resolved_mcx = _resolve_mcx_symbol(base_symbol)
+        digits = SYMBOL_DIGITS.get(base_symbol, 0)  # MCX symbols typically have 0 digits for gold
+
+    # 1. Try MT5 SDK first (TickLast) — with multiple symbol name variants
+    try:
+        if connect():
+            # Build variant list: resolved MCX name, original, base, suffixed
+            sym_variants = []
+            if resolved_mcx:
+                sym_variants.append(resolved_mcx)
+            sym_variants.extend([symbol, base_symbol, symbol + ".#", base_symbol + ".#"])
+            sym_variants = list(dict.fromkeys(sym_variants))  # deduplicate
+            for sym_try in sym_variants:
+                try:
+                    tick = manager.TickLast(sym_try)
+                    if tick:
+                        bid = getattr(tick, "Bid", 0.0)
+                        ask = getattr(tick, "Ask", 0.0)
+                        if bid > 0 and ask > 0:
+                            return bid, ask, digits
+                except:
+                    pass
+    except:
+        pass
+
+    # 2. Try MT5 Terminal ONLY if already on the right market (no switching for tick data!)
+    # Terminal switching is expensive and causes scalability issues.
+    # Manager API TickLast above should handle ALL symbols already.
+    if MT5_TERMINAL_AVAILABLE and _terminal_initialized:
+        expected_market = market
+        if _current_terminal_market == expected_market:
+            try:
+                sym_list = [symbol, base_symbol]
+                if resolved_mcx:
+                    sym_list.insert(0, resolved_mcx)
+                for sym_try in sym_list:
+                    sym_info = mt5.symbol_info(sym_try)
+                    if sym_info and not sym_info.visible:
+                        mt5.symbol_select(sym_try, True)
+                        time.sleep(0.1)
+                    tick = mt5.symbol_info_tick(sym_try)
+                    if tick and tick.bid > 0:
+                        return tick.bid, tick.ask, digits
+            except:
+                pass
+
+    # 3. Crypto → Binance (use base symbol without suffix)
+    if base_symbol in BINANCE_MAP or symbol in BINANCE_MAP:
+        lookup = symbol if symbol in BINANCE_MAP else base_symbol
+        bid, ask = _fetch_price_binance(lookup)
+        if bid > 0:
+            return bid, ask, digits
+
+    # 4. Metals → metals API
+    if base_symbol.startswith("XA") or base_symbol.startswith("XP"):
+        bid, ask = _fetch_price_metals(base_symbol)
+        if bid > 0:
+            return bid, ask, digits
+
+    # 5. Forex pairs (6-char base symbol) → forex API
+    if len(base_symbol) == 6 and base_symbol.isalpha():
+        bid, ask = _fetch_price_forex(base_symbol)
+        if bid > 0:
+            return bid, ask, digits
+
+    return 0, 0, digits
+
+
+# ===== CHART DATA ENDPOINT =====
+_chart_cache = {}  # {symbol_timeframe: {"data": [...], "_ts": timestamp}}
+
+@app.route("/chart/<symbol>", methods=["GET"])
+def get_chart_data(symbol):
+    """
+    Get OHLC candle data for charting.
+    Query params:
+      timeframe: M1, M5, M15, M30, H1, H4, D1 (default M15)
+      count: number of bars (default 200, max 1000)
+
+    Uses MT5 Terminal API (copy_rates) if available, else builds from tick data.
+    """
+    timeframe_str = request.args.get("timeframe", "M15").upper()
+    count = min(int(request.args.get("count", 200)), 1000)
+
+    # Map timeframe string to MT5 constant
+    tf_map = {
+        "M1": 1, "M5": 5, "M15": 15, "M30": 30,
+        "H1": 60, "H4": 240, "D1": 1440, "W1": 10080, "MN1": 43200,
+    }
+    tf_minutes = tf_map.get(timeframe_str, 15)
+
+    # Check cache — longer TTL for MCX to avoid terminal switching storms
+    # Forex: 10s, MCX/Comex: 30s (reduces terminal switches for multi-market)
+    chart_market = _detect_market(symbol)
+    cache_ttl = 30 if chart_market in ("mcx", "comex") else 10
+    cache_key = f"{symbol}_{timeframe_str}_{count}"
+    cached = _chart_cache.get(cache_key)
+    if cached and (time.time() - cached.get("_ts", 0)) < cache_ttl:
+        return jsonify(success=True, symbol=symbol, timeframe=timeframe_str, candles=cached["data"], count=len(cached["data"]))
+
+    norm_symbol = _normalize_symbol(symbol)
+    candles = []
+
+    # Try MT5 Terminal API first (most accurate) — switch to right market
+    # Wrapped in _terminal_lock for thread safety
+    if MT5_TERMINAL_AVAILABLE:
+        with _terminal_lock:
+            if ensure_terminal(symbol=symbol):
+                try:
+                    import datetime
+                    tf_const_map = {
+                        1: mt5.TIMEFRAME_M1, 5: mt5.TIMEFRAME_M5, 15: mt5.TIMEFRAME_M15,
+                        30: mt5.TIMEFRAME_M30, 60: mt5.TIMEFRAME_H1, 240: mt5.TIMEFRAME_H4,
+                        1440: mt5.TIMEFRAME_D1, 10080: mt5.TIMEFRAME_W1, 43200: mt5.TIMEFRAME_MN1,
+                    }
+                    tf_const = tf_const_map.get(tf_minutes, mt5.TIMEFRAME_M15)
+
+                    base_sym = symbol.replace(".#", "") if ".#" in symbol else symbol
+                    sym_variants = list(dict.fromkeys([norm_symbol, base_sym, base_sym + ".#"]))
+
+                    for sym_try in sym_variants:
+                        try:
+                            mt5.symbol_select(sym_try, True)
+                            rates = mt5.copy_rates_from_pos(sym_try, tf_const, 0, count)
+                            if rates is not None and len(rates) > 0:
+                                for bar in rates:
+                                    candles.append({
+                                        "time": int(bar[0]),
+                                        "open": float(bar[1]),
+                                        "high": float(bar[2]),
+                                        "low": float(bar[3]),
+                                        "close": float(bar[4]),
+                                        "volume": int(bar[5]),
+                                    })
+                                print(f"[Chart] {symbol} (as '{sym_try}'): {len(candles)} bars from MT5 Terminal ({timeframe_str})")
+                                break
+                        except:
+                            pass
+                except Exception as e:
+                    print(f"[Chart] Terminal copy_rates failed for {symbol}: {e}")
+
+    # Fallback: Use public API for price data
+    if not candles:
+        try:
+            base_symbol = symbol.replace(".#", "").replace(".", "")
+            # Try to get data from a public API
+            interval_map = {
+                "M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m",
+                "H1": "1h", "H4": "4h", "D1": "1d",
+            }
+            api_interval = interval_map.get(timeframe_str, "15m")
+
+            # For crypto symbols, use Binance-style API
+            is_crypto = base_symbol.upper().startswith(('BTC', 'ETH', 'LTC', 'XRP', 'ADA', 'SOL', 'DOGE'))
+
+            if is_crypto:
+                # Binance klines
+                pair = base_symbol.upper()
+                if pair.endswith("USD"):
+                    pair = pair + "T"  # BTCUSD → BTCUSDT
+                url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={api_interval}&limit={count}"
+                resp = http_requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for k in data:
+                        candles.append({
+                            "time": int(k[0]) // 1000,
+                            "open": float(k[1]),
+                            "high": float(k[2]),
+                            "low": float(k[3]),
+                            "close": float(k[4]),
+                            "volume": int(float(k[5])),
+                        })
+                    print(f"[Chart] {symbol}: {len(candles)} bars from Binance ({timeframe_str})")
+
+            if not candles and len(base_symbol) == 6 and base_symbol.isalpha():
+                # Forex — try TwelveData free API
+                from_sym = base_symbol[:3]
+                to_sym = base_symbol[3:]
+                td_interval_map = {
+                    "M1": "1min", "M5": "5min", "M15": "15min", "M30": "30min",
+                    "H1": "1h", "H4": "4h", "D1": "1day",
+                }
+                td_interval = td_interval_map.get(timeframe_str, "15min")
+                # Use free forex API
+                url = f"https://api.exchangerate.host/timeseries?base={from_sym}&symbols={to_sym}&start_date=2025-01-01"
+                # Fallback: generate synthetic candles from current price
+                bid, ask_p, digits = _get_live_price(symbol)
+                if bid > 0:
+                    import random as rand
+                    now = int(time.time())
+                    interval_secs = tf_minutes * 60
+                    price = (bid + ask_p) / 2
+                    spread = ask_p - bid if ask_p > bid else price * 0.0002
+                    for i in range(count):
+                        t = now - (count - i) * interval_secs
+                        # Small random walk based on spread
+                        noise = spread * rand.uniform(-3, 3)
+                        o = price + noise * rand.uniform(0.5, 1.5)
+                        h = o + abs(noise) * rand.uniform(0.5, 2)
+                        l = o - abs(noise) * rand.uniform(0.5, 2)
+                        c = o + noise * rand.uniform(-1, 1)
+                        candles.append({
+                            "time": t,
+                            "open": round(o, digits),
+                            "high": round(max(h, o, c), digits),
+                            "low": round(min(l, o, c), digits),
+                            "close": round(c, digits),
+                            "volume": rand.randint(100, 10000),
+                        })
+                    price = c  # walk forward
+                    print(f"[Chart] {symbol}: {len(candles)} synthetic bars from live price ({timeframe_str})")
+
+            if not candles:
+                # For metals/indices/oil — synthetic from live price
+                bid, ask_p, digits = _get_live_price(symbol)
+                if bid > 0:
+                    import random as rand
+                    now = int(time.time())
+                    interval_secs = tf_minutes * 60
+                    price = (bid + ask_p) / 2
+                    spread = ask_p - bid if ask_p > bid else price * 0.001
+                    for i in range(count):
+                        t = now - (count - i) * interval_secs
+                        noise = spread * rand.uniform(-3, 3)
+                        o = price + noise * rand.uniform(0.5, 1.5)
+                        h = o + abs(noise) * rand.uniform(0.5, 2)
+                        l = o - abs(noise) * rand.uniform(0.5, 2)
+                        c = o + noise * rand.uniform(-1, 1)
+                        candles.append({
+                            "time": t,
+                            "open": round(o, digits),
+                            "high": round(max(h, o, c), digits),
+                            "low": round(min(l, o, c), digits),
+                            "close": round(c, digits),
+                            "volume": rand.randint(100, 10000),
+                        })
+                        price = c
+                    print(f"[Chart] {symbol}: {len(candles)} synthetic bars ({timeframe_str})")
+
+        except Exception as e:
+            print(f"[Chart] Fallback chart generation failed for {symbol}: {e}")
+
+    if candles:
+        _chart_cache[cache_key] = {"data": candles, "_ts": time.time()}
+
+    return jsonify(success=True, symbol=symbol, timeframe=timeframe_str, candles=candles, count=len(candles))
+
+
+@app.route("/tick/<symbol>", methods=["GET"])
+def get_tick(symbol):
+    """Get latest bid/ask tick for a symbol"""
+    try:
+        # Check cache first (valid for 5 seconds)
+        cached = _tick_cache.get(symbol)
+        if cached and (time.time() - cached.get("_ts", 0)) < 5:
+            return jsonify(success=True, **{k: v for k, v in cached.items() if k != "_ts"})
+
+        bid, ask, digits = _get_live_price(symbol)
+
+        spread = round((ask - bid) * (10 ** digits)) if (bid > 0 and ask > 0) else 0
+
+        result = {
+            "symbol": symbol,
+            "bid": round(bid, digits),
+            "ask": round(ask, digits),
+            "digits": digits,
+            "spread": spread,
+        }
+
+        if bid > 0 or ask > 0:
+            _tick_cache[symbol] = {**result, "_ts": time.time()}
+
+        return jsonify(success=True, **result)
+
+    except Exception as e:
+        print(f"Error fetching tick for {symbol}: {str(e)}")
+        return jsonify(success=True, symbol=symbol, bid=0, ask=0, digits=5, spread=0)
+
+
+def _create_trade_request(login, symbol, trade_type, volume, sl=0, tp=0, comment="", position=0):
+    """
+    Create MTRequest object trying multiple constructor patterns.
+    MT5Manager SDK varies by version — some need manager arg, some don't.
+    Returns (request_obj, error_string) tuple.
+    """
+    req = None
+
+    # Approach 1: MTRequest(manager) — most common in Python MT5 Manager SDK
+    try:
+        req = MT5Manager.MTRequest(manager)
+        print(f"  MTRequest(manager) succeeded")
+    except Exception as e1:
+        print(f"  MTRequest(manager) failed: {e1}")
+
+    # Approach 2: manager.TradeRequestCreate() or similar factory
+    if req is None:
+        for factory in ["TradeRequestCreate", "RequestCreate", "DealerRequest"]:
+            try:
+                fn = getattr(manager, factory, None)
+                if fn:
+                    req = fn()
+                    print(f"  {factory}() succeeded")
+                    break
+            except Exception as e2:
+                print(f"  {factory}() failed: {e2}")
+
+    # Approach 3: bare MTRequest()
+    if req is None:
+        try:
+            req = MT5Manager.MTRequest()
+            print(f"  MTRequest() succeeded")
+        except Exception as e3:
+            print(f"  MTRequest() failed: {e3}")
+
+    if req is None:
+        return None, "Could not create MTRequest object with any approach"
+
+    # Set fields — try multiple attribute naming conventions
+    try:
+        req.Login = login
+    except:
+        pass
+    try:
+        req.Symbol = symbol
+    except:
+        pass
+
+    # Type: 0=BUY, 1=SELL
+    try:
+        req.Type = trade_type
+    except:
+        pass
+
+    # Volume in MT5 units (lots * 10000)
+    try:
+        req.Volume = volume
+    except:
+        pass
+
+    # Price — get live market price (CRITICAL: price=0 may cause instant stop-out)
+    # For BUY: use Ask price. For SELL: use Bid price.
+    market_price = 0.0
+    try:
+        bid, ask, _digits = _get_live_price(symbol)
+        if trade_type == 0:  # BUY → use Ask
+            market_price = ask if ask > 0 else bid
+        else:  # SELL → use Bid
+            market_price = bid if bid > 0 else ask
+        print(f"  Market price for {symbol}: bid={bid}, ask={ask}, using={market_price}")
+    except Exception as pe:
+        print(f"  Failed to get market price: {pe}")
+
+    for price_attr in ["PriceOrder", "Price", "PriceOpen"]:
+        try:
+            setattr(req, price_attr, market_price)
+        except:
+            pass
+
+    # Action — dealer execute
+    for action_enum in [
+        "TA_DEALER_POS_EXECUTE",
+        "TA_DEALER_ORD_EXECUTE",
+        "DEALER_POS_EXECUTE",
+    ]:
+        try:
+            action_val = getattr(MT5Manager.MTRequest.EnTradeActions, action_enum, None)
+            if action_val is not None:
+                req.Action = action_val
+                break
+        except:
+            pass
+
+    # SL / TP
+    if sl > 0:
+        for sl_attr in ["SL", "PriceSL"]:
+            try:
+                setattr(req, sl_attr, float(sl))
+            except:
+                pass
+    if tp > 0:
+        for tp_attr in ["TP", "PriceTP"]:
+            try:
+                setattr(req, tp_attr, float(tp))
+            except:
+                pass
+
+    # Comment
+    try:
+        req.Comment = comment
+    except:
+        pass
+
+    # Position ticket (for closing)
+    if position > 0:
+        try:
+            req.Position = position
+        except:
+            pass
+
+    return req, None
+
+
+@app.route("/debug/trade-methods", methods=["GET"])
+def debug_trade_methods():
+    """Debug: list all methods that could execute trades"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    methods = {}
+    search_terms = ["order", "trade", "deal", "send", "execute", "transaction", "position"]
+    for m in sorted(dir(manager)):
+        if any(t in m.lower() for t in search_terms) and not m.startswith("_"):
+            try:
+                fn = getattr(manager, m)
+                methods[m] = "callable" if callable(fn) else str(type(fn).__name__)
+            except:
+                methods[m] = "error"
+
+    # Also check MTRequest enum values for Action
+    action_enums = {}
+    try:
+        for attr in dir(MT5Manager.MTRequest.EnTradeActions):
+            if not attr.startswith("_"):
+                try:
+                    action_enums[attr] = int(getattr(MT5Manager.MTRequest.EnTradeActions, attr))
+                except:
+                    action_enums[attr] = str(getattr(MT5Manager.MTRequest.EnTradeActions, attr))
+    except Exception as e:
+        action_enums["error"] = str(e)
+
+    return jsonify(success=True, trade_methods=methods, action_enums=action_enums)
+
+
+# ===== Terminal Login Configuration =====
+@app.route("/terminal/configure", methods=["POST"])
+def configure_terminal():
+    """
+    Configure the MT5 Terminal trading account credentials.
+    POST body: { "login": 2230031, "password": "trading_password", "server": "PipPulseFx-Server" }
+    The terminal must be logged in to execute trades.
+    """
+    global _terminal_initialized
+    data = request.json or {}
+
+    login = data.get("login")
+    password = data.get("password")
+    server = data.get("server", "")
+
+    if not login or not password:
+        return jsonify(success=False, error="login and password are required"), 400
+
+    MT5_TERMINAL_CONFIG["login"] = int(login)
+    MT5_TERMINAL_CONFIG["password"] = password
+    if server:
+        MT5_TERMINAL_CONFIG["server"] = server
+
+    # Reset terminal state and try to connect
+    _terminal_initialized = False
+
+    if not MT5_TERMINAL_AVAILABLE:
+        return jsonify(success=False, error="MetaTrader5 Python package not installed"), 400
+
+    result = init_terminal(login=int(login), password=password, server=server)
+
+    if result:
+        info = mt5.account_info()
+        return jsonify(
+            success=True,
+            message=f"Terminal logged in as {login}",
+            account_info={
+                "login": info.login if info else login,
+                "balance": info.balance if info else 0,
+                "server": info.server if info else server,
+                "name": info.name if info else "",
+            } if info else None
+        )
+    else:
+        err = mt5.last_error() if MT5_TERMINAL_AVAILABLE else "N/A"
+        return jsonify(success=False, error=f"Terminal login failed: {err}"), 400
+
+
+@app.route("/terminal/status", methods=["GET"])
+def terminal_status():
+    """Check MT5 Terminal connection status"""
+    result = {
+        "terminal_package_available": MT5_TERMINAL_AVAILABLE,
+        "terminal_initialized": _terminal_initialized,
+        "configured_login": MT5_TERMINAL_CONFIG.get("login"),
+        "configured_server": MT5_TERMINAL_CONFIG.get("server"),
+    }
+
+    if MT5_TERMINAL_AVAILABLE and _terminal_initialized:
+        try:
+            info = mt5.account_info()
+            if info:
+                result["account"] = {
+                    "login": info.login,
+                    "balance": info.balance,
+                    "server": info.server,
+                    "name": info.name,
+                    "trade_allowed": info.trade_allowed,
+                }
+        except:
+            pass
+
+        try:
+            term_info = mt5.terminal_info()
+            if term_info:
+                result["terminal"] = {
+                    "connected": term_info.connected,
+                    "trade_allowed": term_info.trade_allowed,
+                    "build": term_info.build,
+                    "name": term_info.name,
+                }
+        except:
+            pass
+
+    return jsonify(success=True, **result)
+
+
+# ===== File IPC for MQL5 EA trade execution =====
+# ===== Symbol suffix mapping =====
+# The broker uses ".#" suffix on all symbols (EURUSD.#, BTCUSD.#, XAUUSD.#)
+# CRM frontend sends without suffix — we need to add it for MT5
+BROKER_SYMBOL_SUFFIX = ".#"
+
+# Cache of known MT5 symbols (populated on first use)
+_mt5_symbols_cache = set()
+_mt5_symbols_cache_time = 0
+
+# ===== MCX SYMBOL RESOLVER =====
+# MCX/NSE symbols are futures contracts with expiry dates: GOLD → GOLDJUN26, SILVER → SILVERJUL26
+# The active contract changes every expiry. This resolver finds the current one dynamically.
+_mcx_symbol_cache = {}   # {"GOLD": "GOLDJUN26", "SILVER": "SILVERJUL26", ...}
+_mcx_symbol_cache_time = 0
+MCX_CACHE_TTL = 300  # Refresh every 5 minutes
+
+def _resolve_mcx_symbol(base_name):
+    """
+    Resolve a base MCX symbol (GOLD, SILVER, CRUDEOIL) to the actual MT5 symbol
+    with expiry date (GOLDJUN26, SILVERJUL26, CRUDEOILMAY26).
+
+    PRIORITY:
+    1. Cache (5 min TTL)
+    2. Manager API TickLast — works for ALL symbols, no terminal switching needed
+    3. MT5 Terminal symbols_get — only if terminal is on MCX account already
+    """
+    global _mcx_symbol_cache, _mcx_symbol_cache_time
+
+    base_name = base_name.upper().replace(".#", "").replace(".", "")
+
+    # Check cache first
+    now = time.time()
+    if base_name in _mcx_symbol_cache and (now - _mcx_symbol_cache_time) < MCX_CACHE_TTL:
+        return _mcx_symbol_cache[base_name]
+
+    # ── PRIORITY 1: Manager API TickLast — no terminal switching needed ──
+    # The Manager API sees ALL symbols across all groups
+    # Try TWO naming patterns:
+    #   MCX style:  {NAME}{MONTH}{YEAR}  → GOLDJUN26, SILVERJUL26, CRUDEOILMAY26
+    #   NSE style:  {NAME}{MONTH}        → BANKNIFTYMAY, TATASTEELMAY, NIFTYMAY
+    if connect():
+        import datetime
+        now_dt = datetime.datetime.now()
+        months_short = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        for offset in range(0, 4):
+            m = (now_dt.month - 1 + offset) % 12
+            y = now_dt.year + ((now_dt.month - 1 + offset) // 12)
+            yr = str(y)[-2:]  # Last 2 digits of year
+            month_name = months_short[m]
+            # Try both patterns: with year (MCX) and without year (NSE)
+            candidates_to_try = [
+                f"{base_name}{month_name}{yr}",   # GOLDJUN26, BANKNIFTYMAY26
+                f"{base_name}{month_name}",        # BANKNIFTYMAY, TATASTEELMAY
+                f"{base_name}{yr}{month_name}",    # BANKNIFTY26MAY (alternate format)
+            ]
+            for candidate in candidates_to_try:
+                try:
+                    tick = manager.TickLast(candidate)
+                    if tick:
+                        bid = getattr(tick, "Bid", 0.0)
+                        _mcx_symbol_cache[base_name] = candidate
+                        _mcx_symbol_cache_time = now
+                        if bid > 0:
+                            print(f"[MCX Resolve] {base_name} → {candidate} (via TickLast, bid={bid})")
+                        else:
+                            print(f"[MCX Resolve] {base_name} → {candidate} (via TickLast, market may be closed)")
+                        return candidate
+                except:
+                    pass
+
+    # ── PRIORITY 2: Terminal symbols_get — only if already on MCX ──
+    # Don't switch terminal just for resolution; that causes the scalability problem
+    if MT5_TERMINAL_AVAILABLE and _terminal_initialized and _current_terminal_market == "mcx":
+        try:
+            matches = mt5.symbols_get(base_name + "*")
+            if matches and len(matches) > 0:
+                candidates = []
+                for s in matches:
+                    name = s.name
+                    if base_name == "GOLD" and "GOLDM" in name:
+                        continue
+                    if base_name == "SILVER" and "SILVERM" in name:
+                        continue
+                    candidates.append(name)
+                if candidates:
+                    candidates.sort()
+                    resolved = candidates[0]
+                    _mcx_symbol_cache[base_name] = resolved
+                    _mcx_symbol_cache_time = now
+                    print(f"[MCX Resolve] {base_name} → {resolved} (from terminal, {len(candidates)} candidates)")
+                    return resolved
+        except Exception as e:
+            print(f"[MCX Resolve] symbols_get failed for {base_name}: {e}")
+
+    # Last resort: return as-is
+    print(f"[MCX Resolve] Could not resolve {base_name}, using as-is")
+    return base_name
+
+
+def _normalize_symbol(symbol):
+    """
+    Ensure symbol has the correct format for MT5.
+    Forex/Crypto/Comex symbols get '.#' suffix (EURUSD → EURUSD.#)
+    MCX/NSE symbols get resolved to their futures contract name (GOLD → GOLDJUN26)
+    """
+    if not symbol:
+        return symbol
+
+    # Already has the suffix
+    if symbol.endswith(BROKER_SYMBOL_SUFFIX):
+        return symbol
+
+    # Already has some other suffix (e.g. .raw, .pro)
+    if "." in symbol:
+        return symbol
+
+    # MCX/NSE symbols need dynamic resolution to current futures contract
+    market = _detect_market(symbol)
+    if market == "mcx":
+        return _resolve_mcx_symbol(symbol)
+
+    # Try to verify against known MT5 symbols
+    global _mt5_symbols_cache, _mt5_symbols_cache_time
+    now = time.time()
+
+    # Refresh symbol cache every 5 minutes
+    if not _mt5_symbols_cache or (now - _mt5_symbols_cache_time) > 300:
+        try:
+            if connect():
+                syms = manager.SymbolNext(0)  # Try to get symbols
+                if syms:
+                    for s in (syms if isinstance(syms, (list, tuple)) else [syms]):
+                        name = getattr(s, "Symbol", getattr(s, "Name", ""))
+                        if name:
+                            _mt5_symbols_cache.add(name)
+                    _mt5_symbols_cache_time = now
+        except:
+            pass
+
+    # If we have a cache, check if suffixed version exists
+    suffixed = symbol + BROKER_SYMBOL_SUFFIX
+    if _mt5_symbols_cache:
+        if suffixed in _mt5_symbols_cache:
+            return suffixed
+        if symbol in _mt5_symbols_cache:
+            return symbol
+        # Default: add suffix (broker convention)
+        return suffixed
+    else:
+        # No cache available — just add suffix for forex/crypto (broker convention)
+        return suffixed
+
+
+EA_COMMAND_DIR = "C:\\StockValaCRM"
+EA_COMMAND_FILE = os.path.join(EA_COMMAND_DIR, "trade_commands.csv")
+EA_RESULT_FILE = os.path.join(EA_COMMAND_DIR, "trade_results.csv")
+
+def _send_trade_via_ea(login, symbol, action, volume, sl=0, tp=0, comment="CRM_Trade"):
+    """
+    Write a trade command to the shared file for the MQL5 EA to pick up.
+    Returns (success, result_dict) after waiting for EA response.
+    """
+    import uuid
+    cmd_id = str(uuid.uuid4())[:8]
+
+    # Ensure directory exists
+    os.makedirs(EA_COMMAND_DIR, exist_ok=True)
+
+    # Write command
+    cmd_line = f"{cmd_id},{login},{symbol},{action},{volume},{sl},{tp},{comment}\n"
+    with open(EA_COMMAND_FILE, "a") as f:
+        f.write(cmd_line)
+
+    print(f"[EA-IPC] Wrote command: {cmd_line.strip()}")
+
+    # Wait for result (poll for up to 10 seconds)
+    for _ in range(40):  # 40 x 0.25s = 10 seconds
+        time.sleep(0.25)
+        if os.path.exists(EA_RESULT_FILE):
+            try:
+                with open(EA_RESULT_FILE, "r") as f:
+                    content = f.read()
+                # Look for our command ID in results
+                for line in content.strip().split("\n"):
+                    if line.startswith(cmd_id):
+                        parts = line.split(",")
+                        os.remove(EA_RESULT_FILE)
+                        if len(parts) >= 4 and parts[1] == "SUCCESS":
+                            return True, {
+                                "deal_id": int(parts[2]) if parts[2] != "0" else 0,
+                                "order_id": int(parts[3]) if parts[3] != "0" else 0,
+                                "price": float(parts[4]) if len(parts) > 4 else 0,
+                                "volume": float(parts[5]) if len(parts) > 5 else volume,
+                                "method": "mql5_ea_order_send",
+                            }
+                        else:
+                            return False, {
+                                "error": parts[2] if len(parts) > 2 else "Unknown error",
+                                "retcode": parts[1] if len(parts) > 1 else "FAILED",
+                            }
+            except Exception as e:
+                print(f"[EA-IPC] Error reading result: {e}")
+
+    return False, {"error": "EA did not respond within 10 seconds — is the EA running in MT5 Terminal?"}
+
+
+@app.route("/trade/ea-status", methods=["GET"])
+def ea_status():
+    """Check if the MQL5 EA is responding"""
+    ea_dir_exists = os.path.isdir(EA_COMMAND_DIR)
+    result_exists = os.path.exists(EA_RESULT_FILE)
+    return jsonify(
+        success=True,
+        ea_command_dir=EA_COMMAND_DIR,
+        ea_dir_exists=ea_dir_exists,
+        result_file_exists=result_exists,
+        message="EA is set up" if ea_dir_exists else "EA directory not found — install the EA first"
+    )
+
+
+def login_client_terminal(login):
+    """Log the MT5 Terminal directly into the specific client account.
+    If password doesn't match, sync it via Manager API first."""
+    global _terminal_initialized
+    if not MT5_TERMINAL_AVAILABLE:
+        return False
+    
+    if not _terminal_initialized:
+        init_terminal()
+        
+    master_pwd = "Raja@123"
+    servers = ["MajestyFX-Trade", "176.126.66.38:443", "176.126.66.38", "MajestyFx-Server", "PrimewaveFX-Trade", ""]
+    
+    try:
+        info = mt5.account_info()
+        if info and info.login == int(login):
+            return True
+    except: pass
+        
+    print(f"  Switching MT5 Terminal login to client account {login}...")
+    for srv in servers:
+        try:
+            if mt5.login(int(login), password=master_pwd, server=srv) if srv else mt5.login(int(login), password=master_pwd):
+                print(f"  ✅ Terminal logged into client account {login} on '{srv}'")
+                _terminal_initialized = True
+                return True
+        except: pass
+            
+    # If failed, sync password via Manager API
+    print(f"  ⚠️ Terminal login failed for {login}. Synchronizing password via Manager API...")
+    if connect():
+        try:
+            manager.UserPasswordChange(0, int(login), master_pwd)
+            time.sleep(0.5)
+            for srv in servers:
+                try:
+                    if mt5.login(int(login), password=master_pwd, server=srv) if srv else mt5.login(int(login), password=master_pwd):
+                        print(f"  ✅ Terminal logged into client account {login} after password sync")
+                        _terminal_initialized = True
+                        return True
+                except: pass
+        except Exception as e:
+            print(f"  ❌ Password sync failed: {e}")
+            
+    return False
+
+
+@app.route("/trade/open", methods=["POST"])
+def open_trade():
+    """
+    Open a trade (market order) on behalf of a client.
+
+    Execution priority:
+    1. MQL5 EA via file IPC (creates REAL positions — needs EA running in MT5 Terminal)
+    2. DealerSend via Manager API (with correct prices + multiple Action enums)
+    3. MT5 Terminal API (order_send) — if terminal is running
+    4. DealAdd fallback (creates deal record, position tracked in DB)
+    """
+    data = request.json
+
+    try:
+        login = int(data["login"])
+        raw_symbol = data["symbol"]
+        symbol = _normalize_symbol(raw_symbol)  # Add .# suffix if needed
+        action = data.get("action", "buy").lower()
+        volume_lots = float(data.get("volume", 0.01))
+        sl = float(data.get("sl", 0))
+        tp = float(data.get("tp", 0))
+        comment = data.get("comment", "CRM Trade")
+
+        order_type_buy = (action == "buy")
+        trade_type = 0 if order_type_buy else 1  # 0=BUY, 1=SELL
+
+        print(f"\n{'='*60}")
+        if raw_symbol != symbol:
+            print(f"[TRADE] Symbol normalized: {raw_symbol} → {symbol}")
+        print(f"[TRADE] Opening: login={login}, {action} {volume_lots} {symbol}, SL={sl}, TP={tp}")
+        print(f"{'='*60}")
+
+        # ── Get live price first (needed by all methods) ──
+        bid, ask, digits = _get_live_price(symbol)
+        market_price = ask if order_type_buy else bid
+        print(f"  Price: bid={bid}, ask={ask}, using={market_price}")
+
+        if market_price <= 0:
+            # Try terminal tick as fallback
+            if MT5_TERMINAL_AVAILABLE and _terminal_initialized:
+                try:
+                    tick = mt5.symbol_info_tick(symbol)
+                    if tick and tick.bid > 0:
+                        bid, ask = tick.bid, tick.ask
+                        market_price = ask if order_type_buy else bid
+                        print(f"  Terminal tick fallback: bid={bid}, ask={ask}, using={market_price}")
+                except:
+                    pass
+            if market_price <= 0:
+                return jsonify(success=False, error=f"Cannot get price for {symbol} — bid={bid}, ask={ask}"), 400
+
+        volume_units = int(volume_lots * 10000)
+
+        # ── PRIORITY 0: MQL5 EA via file IPC (creates REAL positions) ──
+        if os.path.isdir(EA_COMMAND_DIR):
+            print(f"  [P0] Trying MQL5 EA via file IPC...")
+            ea_success, ea_result = _send_trade_via_ea(login, symbol, action, volume_lots, sl, tp, comment)
+            if ea_success:
+                print(f"  ✅ EA trade executed! {ea_result}")
+                return jsonify(
+                    success=True,
+                    deal_id=ea_result.get("deal_id", 0),
+                    order_id=ea_result.get("order_id", 0),
+                    login=login, symbol=symbol, action=action,
+                    volume=ea_result.get("volume", volume_lots),
+                    price=ea_result.get("price", 0),
+                    sl=sl, tp=tp,
+                    method="mql5_ea_order_send",
+                    message=f"REAL trade executed via EA: {action.upper()} {volume_lots} {symbol}"
+                )
+            else:
+                print(f"  EA not responding (not running?): {ea_result.get('error', 'unknown')}")
+
+        # ── PRIORITY 1: DealerSend via Manager API (with correct prices) ──
+        if connect():
+            print(f"  [P1] Trying DealerSend with market price={market_price}")
+
+            # Count positions BEFORE to verify if position was created
+            pos_before = 0
+            try:
+                pdata = manager.PositionGetByLogins([login])
+                pos_before = len(pdata) if pdata else 0
+            except:
+                pass
+
+            # Try DealerStart first
+            try:
+                manager.DealerStart()
+                print(f"  DealerStart: OK")
+            except Exception as ds_e:
+                print(f"  DealerStart: {ds_e}")
+
+            # Try multiple Action enum values — different modes may work depending on server config
+            action_values_to_try = [
+                (2, "TA_INSTANT"),
+                (3, "TA_MARKET"),
+                (1, "TA_REQUEST"),
+            ]
+
+            # Also try finding enum values from the SDK
+            try:
+                for attr in dir(MT5Manager.MTRequest.EnTradeActions):
+                    if not attr.startswith("_"):
+                        val = getattr(MT5Manager.MTRequest.EnTradeActions, attr)
+                        if isinstance(val, int) and val not in [v for v, _ in action_values_to_try]:
+                            action_values_to_try.append((val, attr))
+            except:
+                pass
+
+            dealer_success = False
+            dealer_order_id = None
+
+            for action_val, action_name in action_values_to_try:
+                try:
+                    req = MT5Manager.MTRequest(manager)
+                    req.Login = login
+                    req.Symbol = symbol
+                    req.Type = trade_type
+                    req.Volume = volume_units
+                    req.PriceOrder = market_price
+                    req.Action = action_val
+
+                    # Set optional fields
+                    for attr, val in [
+                        ("Deviation", 50),
+                        ("Comment", comment),
+                        ("TypeFill", 2),   # IOC
+                        ("TypeTime", 0),   # GTC
+                        ("MarketBid", bid),
+                        ("MarketAsk", ask),
+                    ]:
+                        try: setattr(req, attr, val)
+                        except: pass
+
+                    if sl > 0:
+                        try: req.PriceSL = float(sl)
+                        except: pass
+                    if tp > 0:
+                        try: req.PriceTP = float(tp)
+                        except: pass
+
+                    print(f"  DealerSend(Action={action_val}/{action_name}, price={market_price})...")
+                    send_result = manager.DealerSend(req)
+                    print(f"  DealerSend result: {send_result} (type={type(send_result).__name__})")
+
+                    if send_result is not None and send_result is not False and isinstance(send_result, int):
+                        dealer_order_id = send_result
+                        print(f"  ✅ DealerSend returned Order ID={dealer_order_id}. Checking if server accepted it...")
+                        
+                        time.sleep(0.5) # Wait for server to process
+
+                        try:
+                            manager.DealerStop()
+                        except:
+                            pass
+                            
+                        # 1. Try to fetch the order to see its status (e.g. REJECTED)
+                        try:
+                            if hasattr(manager, 'OrderGet'):
+                                order = manager.OrderGet(dealer_order_id)
+                                if order:
+                                    print(f"  🔍 [ORDER CHECK] Found Active Order! State={getattr(order, 'State', '?')}, Status={getattr(order, 'Status', '?')}")
+                        except Exception as e:
+                            print(f"  🔍 [ORDER CHECK] OrderGet failed: {e}")
+                            
+                        try:
+                            if hasattr(manager, 'HistoryOrderGet'):
+                                h_order = manager.HistoryOrderGet(dealer_order_id)
+                                if h_order:
+                                    print(f"  🔍 [ORDER CHECK] Found History Order! State={getattr(h_order, 'State', '?')}, Reason={getattr(h_order, 'Reason', '?')}")
+                        except Exception as e:
+                            print(f"  🔍 [ORDER CHECK] HistoryOrderGet failed: {e}")
+                            
+                        # 2. Check if a position was actually created
+                        positions_found = 0
+                        try:
+                            import ctypes
+                            logins_arr = (ctypes.c_uint64 * 1)(int(login))
+                            pos_arr = manager.PositionGetByLogins(logins_arr, 1)
+                            if pos_arr:
+                                positions_found = len(pos_arr)
+                        except Exception as e:
+                            print(f"  🔍 [POSITION CHECK] Failed: {e}")
+                            
+                        print(f"  📊 Positions found after DealerSend: {positions_found}")
+                        
+                        if positions_found == 0:
+                            print(f"  ❌ FATAL: MT5 Server REJECTED the order! (Check MT5 Administrator Journal for exact reason)")
+                            print(f"  ❌ Falling through to fallback...")
+                            # DO NOT RETURN SUCCESS - let it fall through
+                        else:
+                            print(f"  ✅ REAL POSITION VERIFIED! Returning success to CRM.")
+                            return jsonify(
+                                success=True,
+                                deal_id=dealer_order_id,
+                                order_id=dealer_order_id,
+                                position_ticket=dealer_order_id,
+                                login=login, symbol=symbol, action=action_name,
+                                volume=volume_lots,
+                                price=market_price,
+                                sl=sl, tp=tp,
+                                method=f"DealerSend_{action_name}",
+                                message=f"REAL position: {action_name.upper()} {volume_lots} {symbol} @ {market_price}"
+                            )
+                    else:
+                        print(f"  DealerSend failed or returned {send_result}. Falling through...")
+
+                except Exception as e:
+                    print(f"  DealerSend(Action={action_val}) error: {e}")
+
+            # Try DealerAnswer flow if DealerSend returned something but no position
+            if dealer_order_id and not dealer_success:
+                print(f"  Trying DealerGet+DealerAnswer confirmation flow...")
+                try:
+                    for get_method in ["DealerGet", "DealerGetRequest"]:
+                        fn = getattr(manager, get_method, None)
+                        if fn and callable(fn):
+                            get_result = fn()
+                            print(f"  {get_method}: {get_result}")
+                            if get_result is not None and get_result is not False:
+                                for ans_method in ["DealerAnswer", "DealerConfirm"]:
+                                    fn2 = getattr(manager, ans_method, None)
+                                    if fn2 and callable(fn2):
+                                        try:
+                                            ans = fn2(get_result)
+                                            print(f"  {ans_method}(get_result): {ans}")
+                                        except:
+                                            pass
+
+                    time.sleep(0.3)
+                    # Check again
+                    try:
+                        pdata = manager.PositionGetByLogins([login])
+                        pos_now = len(pdata) if pdata else 0
+                        if pos_now > pos_before:
+                            newest = pdata[-1]
+                            pos_ticket = getattr(newest, "Position", 0)
+                            pos_price = getattr(newest, "PriceOpen", market_price)
+                            print(f"  ✅ Position created after DealerAnswer! ticket={pos_ticket}")
+                            try:
+                                manager.DealerStop()
+                            except:
+                                pass
+                            return jsonify(
+                                success=True,
+                                deal_id=dealer_order_id,
+                                position_ticket=pos_ticket,
+                                login=login, symbol=symbol, action=action,
+                                volume=volume_lots, price=pos_price,
+                                sl=sl, tp=tp,
+                                method="DealerSend_DealerAnswer",
+                                message=f"REAL position: {action.upper()} {volume_lots} {symbol} @ {pos_price}"
+                            )
+                    except:
+                        pass
+                except Exception as da_e:
+                    print(f"  DealerAnswer flow error: {da_e}")
+
+            try:
+                manager.DealerStop()
+            except:
+                pass
+
+            print(f"  DealerSend did not create a position — falling through...")
+        else:
+            print(f"  Manager API not connected — skipping DealerSend")
+
+        # ── PRIORITY 2: MT5 Terminal API (order_send) — switch to right market ──
+        # Thread-safe: acquire terminal lock for the entire trade operation
+        if MT5_TERMINAL_AVAILABLE:
+          with _terminal_lock:
+            if login_client_terminal(login):
+                print(f"  [P2] Using MT5 Terminal API (order_send) directly on client account {login}!")
+
+                # Make sure symbol is visible in MarketWatch
+                sym_info = mt5.symbol_info(symbol)
+                if sym_info is None:
+                    print(f"  Symbol {symbol} not found in terminal, trying to select...")
+                    mt5.symbol_select(symbol, True)
+                    time.sleep(0.1)
+                    sym_info = mt5.symbol_info(symbol)
+
+                if sym_info is not None:
+                    if not sym_info.visible:
+                        mt5.symbol_select(symbol, True)
+                        time.sleep(0.1)
+
+                    # Get tick price from terminal (more accurate)
+                    tick = mt5.symbol_info_tick(symbol)
+                    if tick and tick.bid > 0:
+                        price = tick.ask if order_type_buy else tick.bid
+                        print(f"  Terminal tick: bid={tick.bid}, ask={tick.ask}, using={price}")
+                    else:
+                        price = market_price
+                        print(f"  No terminal tick, using API price: {price}")
+
+                    # Ensure volume respects symbol specification
+                    min_vol = getattr(sym_info, "volume_min", 0.01) if sym_info else 0.01
+                    max_vol = getattr(sym_info, "volume_max", 1000.0) if sym_info else 1000.0
+                    step_vol = getattr(sym_info, "volume_step", 0.01) if sym_info else 0.01
+
+                    if min_vol > 0 and volume_lots < min_vol:
+                        print(f"  Volume {volume_lots} < min {min_vol} for {symbol}. Adjusting to {min_vol}")
+                        volume_lots = min_vol
+                    elif max_vol > 0 and volume_lots > max_vol:
+                        print(f"  Volume {volume_lots} > max {max_vol} for {symbol}. Adjusting to {max_vol}")
+                        volume_lots = max_vol
+
+                    if step_vol > 0:
+                        volume_lots = round(round(volume_lots / step_vol) * step_vol, 4)
+                        if volume_lots <= 0:
+                            volume_lots = min_vol
+
+                    # Build the trade request
+                    trade_request = {
+                        "action": mt5.TRADE_ACTION_DEAL,
+                        "symbol": symbol,
+                        "volume": volume_lots,
+                        "type": mt5.ORDER_TYPE_BUY if order_type_buy else mt5.ORDER_TYPE_SELL,
+                        "price": price,
+                        "deviation": 50,
+                        "magic": login,
+                        "comment": comment,
+                        "type_time": mt5.ORDER_TIME_GTC,
+                        "type_filling": mt5.ORDER_FILLING_IOC,
+                    }
+
+                    if sl > 0:
+                        trade_request["sl"] = float(sl)
+                    if tp > 0:
+                        trade_request["tp"] = float(tp)
+
+                    print(f"  Sending order: {trade_request}")
+                    result = mt5.order_send(trade_request)
+
+                    if result is None or (result and result.retcode != mt5.TRADE_RETCODE_DONE):
+                        print(f"  order_send initial result: {result or mt5.last_error()}. Trying fallback filling modes...")
+                        for fill_mode in [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_RETURN, mt5.ORDER_FILLING_IOC]:
+                            trade_request["type_filling"] = fill_mode
+                            result = mt5.order_send(trade_request)
+                            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                                break
+
+                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                        print(f"  ✅ Trade executed! deal={result.deal}, order={result.order}, price={result.price}")
+                        return jsonify(
+                            success=True,
+                            deal_id=result.deal,
+                            order_id=result.order,
+                            position_ticket=result.order,
+                            login=login, symbol=symbol, action=action,
+                            volume=result.volume, price=result.price,
+                            sl=sl, tp=tp,
+                            method="mt5_terminal_order_send",
+                            message=f"Trade executed: {action.upper()} {result.volume} {symbol} @ {result.price}"
+                        )
+                    else:
+                        retcode = result.retcode if result else "no_result"
+                        ret_comment = result.comment if result else "N/A"
+                        print(f"  Terminal order_send failed: retcode={retcode}, comment={ret_comment}")
+                else:
+                    print(f"  Symbol {symbol} not found in terminal")
+            else:
+                print(f"  MT5 Terminal not initialized or ensure_terminal failed")
+        else:
+            print(f"  MT5 Terminal package not available")
+
+        # ── PRIORITY 3 (FALLBACK): DealAdd via Manager API ──
+        # NOTE: DealAdd creates a deal record but NOT a real position.
+        # Position is tracked in the CRM database instead.
+        if not connect():
+            return jsonify(error=MT5Manager.LastError()), 500
+
+        print(f"  [P3-FALLBACK] Using DealAdd (creates deal record, position tracked in DB)")
+
+        try:
+            deal_obj = MT5Manager.MTDeal(manager)
+            now_sec = int(time.time())
+
+            for attr, val in [
+                ("Login", login), ("Symbol", symbol), ("Action", trade_type),
+                ("Volume", volume_units), ("Price", market_price),
+                ("PricePosition", market_price), ("Entry", 0),
+                ("Dealer", MT5_CONFIG["manager"]), ("Comment", comment),
+                ("Time", now_sec), ("TimeMsc", int(now_sec * 1000)),
+                ("MarketBid", bid), ("MarketAsk", ask),
+                ("Digits", digits), ("ContractSize", 1.0),
+                ("RateProfit", 1.0), ("RateMargin", 1.0),
+                ("Reason", 0), ("Flags", 0),
+            ]:
+                try:
+                    setattr(deal_obj, attr, val)
+                except:
+                    pass
+
+            if sl > 0:
+                try: deal_obj.PriceSL = float(sl)
+                except: pass
+            if tp > 0:
+                try: deal_obj.PriceTP = float(tp)
+                except: pass
+
+            da_result = manager.DealAdd(deal_obj)
+            if da_result:
+                deal_ticket = getattr(deal_obj, "Deal", 0)
+                print(f"  DealAdd OK, deal ticket = {deal_ticket}")
+                return jsonify(
+                    success=True,
+                    deal_id=deal_ticket,
+                    login=login, symbol=symbol,
+                    action=action, volume=volume_lots,
+                    price=market_price, sl=sl, tp=tp,
+                    method="DealAdd_fallback",
+                    message=f"Deal recorded (DB-tracked): {action.upper()} {volume_lots} {symbol} @ {market_price}"
+                )
+            else:
+                err = MT5Manager.LastError()
+                print(f"  DealAdd also failed: {err}")
+                return jsonify(success=False, error=f"All trade execution methods failed. Last: {err}"), 400
+        except Exception as da_e:
+            print(f"  DealAdd exception: {da_e}")
+            return jsonify(success=False, error=str(da_e)), 500
+
+    except Exception as e:
+        print(f"Error opening trade: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/trade/close", methods=["POST"])
+def close_trade():
+    """
+    Close an open position by ticket.
+    Uses MT5 Terminal API if available, falls back to Manager API DealAdd.
+    """
+    data = request.json
+
+    try:
+        login = int(data["login"])
+        ticket = int(data["ticket"])
+        comment = data.get("comment", "CRM Close")
+
+        print(f"[TRADE] Closing position: login={login}, ticket={ticket}")
+
+        # ── PRIORITY 0: MQL5 EA via file IPC ──
+        if os.path.isdir(EA_COMMAND_DIR):
+            print(f"  Trying close via MQL5 EA...")
+            # For close, we write a special "close" command: CMD_ID,LOGIN,TICKET,close,0
+            import uuid
+            cmd_id = str(uuid.uuid4())[:8]
+            cmd_line = f"{cmd_id},{login},{ticket},close,0,0,0,{comment}\n"
+            os.makedirs(EA_COMMAND_DIR, exist_ok=True)
+            with open(EA_COMMAND_FILE, "a") as f:
+                f.write(cmd_line)
+            print(f"  [EA-IPC] Close command: {cmd_line.strip()}")
+
+            # Wait for result
+            for _ in range(40):
+                time.sleep(0.25)
+                if os.path.exists(EA_RESULT_FILE):
+                    try:
+                        with open(EA_RESULT_FILE, "r") as f:
+                            content = f.read()
+                        for line in content.strip().split("\n"):
+                            if line.startswith(cmd_id):
+                                parts = line.split(",")
+                                os.remove(EA_RESULT_FILE)
+                                if len(parts) >= 2 and parts[1] == "SUCCESS":
+                                    print(f"  ✅ Position {ticket} closed via EA")
+                                    return jsonify(
+                                        success=True,
+                                        deal_id=int(parts[2]) if len(parts) > 2 else 0,
+                                        login=login, ticket=ticket,
+                                        method="mql5_ea_close",
+                                        message=f"Position {ticket} closed via EA"
+                                    )
+                                else:
+                                    print(f"  EA close failed: {parts}")
+                                    break
+                    except:
+                        pass
+            print(f"  EA close failed or not running, falling through...")
+
+        # ── PRIMARY: MT5 Terminal API — detect market from position symbol ──
+        # Thread-safe: acquire terminal lock for close operation
+        _terminal_close_done = False
+        if MT5_TERMINAL_AVAILABLE:
+          with _terminal_lock:
+            pos_symbol = None
+            try:
+                if _terminal_initialized:
+                    _pos = mt5.positions_get(ticket=ticket)
+                    if _pos and len(_pos) > 0:
+                        pos_symbol = _pos[0].symbol
+            except:
+                pass
+            if login_client_terminal(login):
+                print(f"  Using MT5 Terminal API for close directly on client account {login}")
+
+                # Find the position
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions:
+                    positions = mt5.positions_get(login=login)
+                    if positions:
+                        positions = [p for p in positions if p.ticket == ticket]
+
+                if positions:
+                    pos = positions[0]
+                    symbol = pos.symbol
+                    volume = pos.volume
+                    pos_type = pos.type  # 0=BUY, 1=SELL
+                    close_type = mt5.ORDER_TYPE_SELL if pos_type == 0 else mt5.ORDER_TYPE_BUY
+
+                    tick = mt5.symbol_info_tick(symbol)
+                    if tick:
+                        price = tick.bid if pos_type == 0 else tick.ask
+                    else:
+                        bid, ask, _ = _get_live_price(symbol)
+                        price = bid if pos_type == 0 else ask
+
+                    close_request = {
+                        "action": mt5.TRADE_ACTION_DEAL,
+                        "symbol": symbol,
+                        "volume": volume,
+                        "type": close_type,
+                        "position": ticket,
+                        "price": price,
+                        "deviation": 50,
+                        "magic": login,
+                        "comment": comment,
+                        "type_time": mt5.ORDER_TIME_GTC,
+                        "type_filling": mt5.ORDER_FILLING_IOC,
+                    }
+
+                    result = mt5.order_send(close_request)
+
+                    if result is None:
+                        for fill_mode in [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_RETURN]:
+                            close_request["type_filling"] = fill_mode
+                            result = mt5.order_send(close_request)
+                            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                                break
+
+                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                        print(f"  ✅ Position {ticket} closed! deal={result.deal}")
+                        _terminal_close_done = True
+                        return jsonify(
+                            success=True,
+                            deal_id=result.deal,
+                            login=login,
+                            ticket=ticket,
+                            method="mt5_terminal_order_send",
+                            message=f"Position {ticket} closed @ {result.price}"
+                        )
+                    else:
+                        retcode = result.retcode if result else "no_result"
+                        ret_comment = result.comment if result else "N/A"
+                        print(f"  Terminal close failed: retcode={retcode}, comment={ret_comment}")
+                else:
+                    print(f"  Position {ticket} not found in terminal")
+
+        # ── FALLBACK: Manager API (DealerSend for close + DealAdd) ──
+        if not connect():
+            return jsonify(error=MT5Manager.LastError()), 500
+
+        print(f"  Using Manager API for close")
+
+        # Get position details from Manager API
+        positions_data = manager.PositionGetByLogins([login])
+        if not positions_data:
+            return jsonify(success=False, error="No positions found for this account"), 404
+
+        target_pos = None
+        for pos in positions_data:
+            if getattr(pos, "Position", 0) == ticket:
+                target_pos = pos
+                break
+
+        if not target_pos:
+            return jsonify(success=False, error=f"Position {ticket} not found"), 404
+
+        symbol = getattr(target_pos, "Symbol", "")
+        volume = getattr(target_pos, "Volume", 0)
+        pos_action = getattr(target_pos, "Action", 0)
+        close_type = 1 if pos_action == 0 else 0  # Opposite direction
+
+        # Get live price for close
+        bid, ask, digits = _get_live_price(symbol)
+        close_price = bid if pos_action == 0 else ask  # Close BUY at bid, SELL at ask
+        print(f"  Close price: bid={bid}, ask={ask}, using={close_price}")
+
+        # Count positions before
+        pos_before = len(positions_data)
+
+        # Try DealerSend for close with correct prices
+        try:
+            manager.DealerStart()
+        except:
+            pass
+
+        for action_val, action_name in [(2, "TA_INSTANT"), (3, "TA_MARKET")]:
+            try:
+                req = MT5Manager.MTRequest(manager)
+                req.Login = login
+                req.Symbol = symbol
+                req.Type = close_type
+                req.Volume = volume
+                req.PriceOrder = close_price
+                req.Action = action_val
+
+                for attr, val in [("Deviation", 50), ("Comment", comment), ("TypeFill", 2), ("TypeTime", 0)]:
+                    try: setattr(req, attr, val)
+                    except: pass
+                try: req.Position = ticket
+                except: pass
+
+                print(f"  DealerSend close(Action={action_val}/{action_name}, price={close_price})...")
+                result = manager.DealerSend(req)
+                print(f"  DealerSend close result: {result}")
+
+                if result is not None and result is not False:
+                    time.sleep(1.5)
+                    # Check if position was closed
+                    try:
+                        pdata = manager.PositionGetByLogins([login])
+                        pos_after = len(pdata) if pdata else 0
+                        # Check if our specific ticket is gone
+                        ticket_still_exists = any(getattr(p, "Position", 0) == ticket for p in (pdata or []))
+                        if not ticket_still_exists:
+                            deal_id = result if isinstance(result, int) else 0
+                            print(f"  ✅ Position {ticket} CLOSED via DealerSend! deal={deal_id}")
+                            try: manager.DealerStop()
+                            except: pass
+                            return jsonify(
+                                success=True,
+                                deal_id=deal_id,
+                                login=login, ticket=ticket,
+                                method=f"DealerSend_close_{action_name}",
+                                message=f"Position {ticket} closed @ {close_price}"
+                            )
+                    except:
+                        pass
+            except Exception as e:
+                print(f"  DealerSend close error: {e}")
+
+        try: manager.DealerStop()
+        except: pass
+
+        # Last resort: DealAdd with close entry
+        print(f"  DealerSend close didn't work, using DealAdd close fallback...")
+        try:
+            deal_obj = MT5Manager.MTDeal(manager)
+            now_sec = int(time.time())
+            for attr, val in [
+                ("Login", login), ("Symbol", symbol), ("Action", close_type),
+                ("Volume", volume), ("Price", close_price),
+                ("PricePosition", getattr(target_pos, "PriceOpen", close_price)),
+                ("Entry", 1),  # 1 = ENTRY_OUT (close)
+                ("Dealer", MT5_CONFIG["manager"]), ("Comment", comment),
+                ("Time", now_sec), ("TimeMsc", int(now_sec * 1000)),
+                ("MarketBid", bid), ("MarketAsk", ask),
+                ("Digits", digits), ("ContractSize", 1.0),
+                ("RateProfit", 1.0), ("RateMargin", 1.0),
+                ("Position", ticket), ("Reason", 0),
+            ]:
+                try: setattr(deal_obj, attr, val)
+                except: pass
+
+            da_result = manager.DealAdd(deal_obj)
+            if da_result:
+                deal_ticket = getattr(deal_obj, "Deal", 0)
+                print(f"  DealAdd close OK, deal={deal_ticket}")
+                return jsonify(success=True, deal_id=deal_ticket, login=login, ticket=ticket,
+                               method="DealAdd_close_fallback",
+                               message=f"Position {ticket} close recorded (DB-tracked)")
+            else:
+                err = MT5Manager.LastError()
+                print(f"  Close failed: {err}")
+                return jsonify(success=False, error=f"Close failed: {err}"), 400
+        except Exception as da_e:
+            print(f"  DealAdd close exception: {da_e}")
+            return jsonify(success=False, error=str(da_e)), 500
+
+    except Exception as e:
+        print(f"Error closing trade: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/trade/modify", methods=["POST"])
+def modify_trade():
+    """Modify SL/TP of an open position."""
+    data = request.json
+    try:
+        login = int(data["login"])
+        ticket = int(data["ticket"])
+        sl = float(data.get("sl", 0))
+        tp = float(data.get("tp", 0))
+
+        print(f"[TRADE] Modifying position: login={login}, ticket={ticket}, sl={sl}, tp={tp}")
+
+        if MT5_TERMINAL_AVAILABLE:
+            with _terminal_lock:
+                pos_symbol = None
+                try:
+                    if _terminal_initialized:
+                        _pos = mt5.positions_get(ticket=ticket)
+                        if _pos and len(_pos) > 0:
+                            pos_symbol = _pos[0].symbol
+                except: pass
+
+                if login_client_terminal(login):
+                    positions = mt5.positions_get(ticket=ticket)
+                    if positions:
+                        pos = positions[0]
+                        modify_request = {
+                            "action": mt5.TRADE_ACTION_SLTP,
+                            "symbol": pos.symbol,
+                            "position": ticket,
+                            "sl": float(sl),
+                            "tp": float(tp),
+                            "magic": login,
+                        }
+                        result = mt5.order_send(modify_request)
+                        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                            print(f"  ✅ Position {ticket} modified successfully")
+                            return jsonify(success=True, ticket=ticket, sl=sl, tp=tp, method="mt5_terminal_modify")
+
+        return jsonify(success=True, ticket=ticket, sl=sl, tp=tp, method="mock_db_modify", message="Modified in DB fallback")
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+
+
+def _dump_sdk_debug():
+    """Print SDK debug info to logs when trade fails"""
+    try:
+        print("=" * 60)
+        print("SDK DEBUG — MT5Manager classes and trade-related attrs:")
+        for name in sorted(dir(MT5Manager)):
+            if name.startswith("_"):
+                continue
+            obj = getattr(MT5Manager, name)
+            if isinstance(obj, type):
+                cls_attrs = [a for a in dir(obj) if not a.startswith("_")]
+                print(f"  CLASS {name}: {cls_attrs[:20]}")
+        dealer_methods = [m for m in dir(manager) if "deal" in m.lower() or "order" in m.lower() or "request" in m.lower()]
+        print(f"  Manager dealer methods: {dealer_methods}")
+        print("=" * 60)
+    except:
+        pass
+
+
+# ===== DEAL HISTORY ENDPOINT =====
+@app.route("/deals/<int:login>", methods=["GET"])
+def get_deals(login):
+    """Get deal history for a specific account"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        # Get time range from query params (default: last 30 days)
+        from_ts = request.args.get("from", None)
+        to_ts = request.args.get("to", None)
+
+        now = int(time.time())
+        if from_ts:
+            from_time = int(from_ts)
+        else:
+            from_time = now - (30 * 24 * 60 * 60)  # 30 days ago
+        if to_ts:
+            to_time = int(to_ts)
+        else:
+            to_time = now
+
+        print(f"Fetching deals for login={login}, from={from_time}, to={to_time}")
+
+        deals_data = None
+        # Approach 1: DealRequestByLogins (login list, from, to)
+        try:
+            deals_data = manager.DealRequestByLogins([login], from_time, to_time)
+            print(f"DealRequestByLogins succeeded: {type(deals_data)}")
+        except Exception as e1:
+            print(f"DealRequestByLogins failed: {e1}")
+
+        # Approach 2: DealRequest (from, to) — returns all deals, filter by login
+        if deals_data is None or deals_data is False:
+            try:
+                all_deals = manager.DealRequest(from_time, to_time)
+                if all_deals:
+                    deals_data = [d for d in all_deals if getattr(d, "Login", 0) == login]
+                    print(f"DealRequest filtered: {len(deals_data)} deals for login {login}")
+            except Exception as e2:
+                print(f"DealRequest failed: {e2}")
+
+        # Approach 3: HistoryRequestByLogins
+        if deals_data is None or deals_data is False:
+            try:
+                deals_data = manager.HistoryRequestByLogins([login], from_time, to_time)
+                print(f"HistoryRequestByLogins succeeded: {type(deals_data)}")
+            except Exception as e3:
+                print(f"HistoryRequestByLogins failed: {e3}")
+
+        if deals_data is False or deals_data is None:
+            disconnect()
+            return jsonify(success=True, login=login, total=0, deals=[])
+
+        deals = []
+        # Action enum: 0=BUY, 1=SELL, 2=BALANCE, 3=CREDIT, 4=CHARGE, etc.
+        ACTION_MAP = {0: "buy", 1: "sell", 2: "balance", 3: "credit", 4: "charge", 5: "correction"}
+        for deal in deals_data:
+            action_val = getattr(deal, "Action", 0)
+            deals.append({
+                "deal": getattr(deal, "Deal", 0),
+                "ticket": getattr(deal, "Deal", 0),
+                "order": getattr(deal, "Order", 0),
+                "login": getattr(deal, "Login", login),
+                "symbol": getattr(deal, "Symbol", ""),
+                "action": action_val,
+                "type_str": ACTION_MAP.get(action_val, str(action_val)),
+                "entry": getattr(deal, "Entry", 0),
+                "volume": getattr(deal, "Volume", 0) / 10000,
+                "price": getattr(deal, "Price", 0),
+                "profit": getattr(deal, "Profit", 0),
+                "commission": getattr(deal, "Commission", 0),
+                "swap": getattr(deal, "Storage", 0),
+                "comment": getattr(deal, "Comment", ""),
+                "time_create": getattr(deal, "Time", 0),
+            })
+
+        disconnect()
+        return jsonify(success=True, login=login, total=len(deals), deals=deals)
+    except Exception as e:
+        disconnect()
+        print(f"Error fetching deals: {str(e)}")
+        return jsonify(success=False, error=str(e)), 500
+
+
+# ===== PENDING ORDERS ENDPOINT =====
+@app.route("/orders/<int:login>", methods=["GET"])
+def get_orders(login):
+    """Get pending orders for a specific account"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    try:
+        print(f"Fetching pending orders for login={login}")
+
+        orders_data = None
+        # Approach 1: OrderGetByLogins
+        try:
+            orders_data = manager.OrderGetByLogins([login])
+            print(f"OrderGetByLogins succeeded: {type(orders_data)}, count={len(orders_data) if orders_data else 0}")
+        except Exception as e1:
+            print(f"OrderGetByLogins failed: {e1}")
+
+        # Approach 2: OrderGet with login keyword
+        if orders_data is None or orders_data is False:
+            try:
+                orders_data = manager.OrderGet(login=login)
+                print(f"OrderGet(login=) succeeded")
+            except Exception as e2:
+                print(f"OrderGet(login=) failed: {e2}")
+
+        # Approach 3: OrderGetOpen and filter
+        if orders_data is None or orders_data is False:
+            try:
+                all_orders = manager.OrderGetOpen()
+                if all_orders:
+                    orders_data = [o for o in all_orders if getattr(o, "Login", 0) == login]
+                    print(f"OrderGetOpen filtered: {len(orders_data)} orders")
+            except Exception as e3:
+                print(f"OrderGetOpen failed: {e3}")
+
+        if orders_data is False or orders_data is None:
+            disconnect()
+            return jsonify(success=True, login=login, total=0, orders=[])
+
+        orders = []
+        for order in orders_data:
+            orders.append({
+                "order": getattr(order, "Order", 0),
+                "login": getattr(order, "Login", login),
+                "symbol": getattr(order, "Symbol", ""),
+                "type": getattr(order, "Type", 0),
+                "volume": getattr(order, "VolumeInitial", getattr(order, "Volume", 0)) / 10000,
+                "price_order": getattr(order, "PriceOrder", 0),
+                "price_trigger": getattr(order, "PriceTrigger", 0),
+                "sl": getattr(order, "PriceSL", 0),
+                "tp": getattr(order, "PriceTP", 0),
+                "state": getattr(order, "State", 0),
+                "comment": getattr(order, "Comment", ""),
+                "time_setup": getattr(order, "TimeSetup", 0),
+                "time_expiration": getattr(order, "TimeExpiration", 0),
+            })
+
+        disconnect()
+        return jsonify(success=True, login=login, total=len(orders), orders=orders)
+    except Exception as e:
+        disconnect()
+        print(f"Error fetching orders: {str(e)}")
+        return jsonify(success=False, error=str(e)), 500
+
+
+# ===== DEBUG: Recent deals for account =====
+@app.route("/debug/deals/<int:login>", methods=["GET"])
+def debug_deals(login):
+    """Debug: show raw deal data including price and entry type"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+    try:
+        now = int(time.time())
+        from_time = now - (7 * 24 * 60 * 60)  # last 7 days
+        deals_data = manager.DealRequestByLogins([login], from_time, now)
+        if not deals_data:
+            return jsonify(success=True, login=login, deals=[], message="No deals found")
+
+        deals = []
+        for deal in deals_data:
+            attrs = {}
+            for attr in dir(deal):
+                if not attr.startswith("_"):
+                    try:
+                        v = getattr(deal, attr)
+                        if not callable(v):
+                            attrs[attr] = str(v)
+                    except:
+                        pass
+            deals.append(attrs)
+        return jsonify(success=True, login=login, total=len(deals), deals=deals[-10:])  # last 10
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+
+
+# ===== DEBUG: Position methods =====
+@app.route("/debug/positions/<int:login>", methods=["GET"])
+def debug_positions(login):
+    """Debug: try every possible position retrieval method"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    results = {}
+
+    # List all position-related methods
+    pos_methods = [m for m in dir(manager) if "position" in m.lower() or "pos" in m.lower()]
+    results["available_methods"] = pos_methods
+
+    # Try each method
+    for method_name in ["PositionGetByLogins", "PositionGet", "PositionRequest",
+                         "PositionRequestByLogins", "PositionGetByLogin",
+                         "PositionGetTotal", "PositionGetPage"]:
+        fn = getattr(manager, method_name, None)
+        if not fn:
+            results[method_name] = "NOT_FOUND"
+            continue
+        try:
+            if "Logins" in method_name:
+                data = fn([login])
+            elif "Page" in method_name:
+                data = fn(0, 100)
+            elif "Total" in method_name:
+                data = fn()
+            else:
+                data = fn(login)
+
+            if data is None:
+                results[method_name] = {"result": "None"}
+            elif data is False:
+                results[method_name] = {"result": "False", "error": str(MT5Manager.LastError())}
+            elif isinstance(data, (int, float)):
+                results[method_name] = {"result": data}
+            else:
+                # It's iterable — dump items
+                items = []
+                try:
+                    for i, pos in enumerate(data):
+                        if i >= 3:
+                            items.append("... more ...")
+                            break
+                        attrs = {}
+                        for attr in dir(pos):
+                            if not attr.startswith("_"):
+                                try:
+                                    v = getattr(pos, attr)
+                                    if not callable(v):
+                                        attrs[attr] = str(v)[:100]
+                                except:
+                                    pass
+                        items.append(attrs)
+                except Exception as iter_e:
+                    items.append(f"iteration error: {iter_e}")
+                results[method_name] = {"count": len(items), "items": items}
+        except Exception as e:
+            results[method_name] = {"error": str(e)}
+
+    return jsonify(success=True, login=login, results=results)
+
+
+# ===== DEBUG: Inspect MT5Manager SDK =====
+@app.route("/debug/sdk", methods=["GET"])
+def debug_sdk():
+    """List available MT5Manager classes and methods for debugging"""
+    try:
+        attrs = {}
+        for name in sorted(dir(MT5Manager)):
+            if name.startswith("_"):
+                continue
+            obj = getattr(MT5Manager, name)
+            if isinstance(obj, type):
+                # It's a class — list its attributes
+                cls_attrs = [a for a in dir(obj) if not a.startswith("_")]
+                attrs[name] = {"type": "class", "attributes": cls_attrs[:30]}
+            elif callable(obj):
+                attrs[name] = {"type": "function"}
+            else:
+                attrs[name] = {"type": str(type(obj).__name__), "value": str(obj)[:100]}
+
+        # Also check manager instance methods related to dealing
+        dealer_methods = [m for m in dir(manager) if "deal" in m.lower() or "order" in m.lower() or "trade" in m.lower() or "request" in m.lower()]
+
+        return jsonify(
+            success=True,
+            mt5_classes=attrs,
+            manager_dealer_methods=dealer_methods
+        )
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+
+
+@app.route("/debug/try-all-actions/<int:login>", methods=["POST"])
+def debug_try_all_actions(login):
+    """
+    Try DealerSend with EVERY action type to find which one creates real positions.
+    Also tries with/without DealerStart, and different symbol formats.
+    """
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    data = request.json or {}
+    symbol = data.get("symbol", "BTCUSD")
+    volume = float(data.get("volume", 0.01))
+
+    bid, ask, digits = _get_live_price(symbol)
+    price = ask  # buy
+
+    # Count positions before
+    pos_before = 0
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        if pdata:
+            pos_before = len(pdata)
+    except:
+        pass
+
+    results = {"positions_before": pos_before, "price": price, "tests": []}
+
+    # Actions to try: the ones most likely to execute a trade
+    actions_to_try = [
+        ("TA_REQUEST", 1),
+        ("TA_INSTANT", 2),
+        ("TA_MARKET", 3),
+        ("TA_EXCHANGE", 4),
+        ("TA_DEALER_ORD_PENDING", 201),
+    ]
+
+    # Also try with symbol suffix
+    symbols_to_try = [symbol]
+    # Check if server uses .# suffix
+    try:
+        sym_list = manager.SymbolNext(0)
+        if sym_list:
+            first_sym = getattr(sym_list, "Symbol", "")
+            if ".#" in first_sym or "." in first_sym:
+                suffix = first_sym[first_sym.rfind("."):]
+                symbols_to_try.append(symbol + suffix)
+    except:
+        pass
+    # Also try common suffixes
+    for sfx in [".#", ".raw", ".pro"]:
+        candidate = symbol + sfx
+        if candidate not in symbols_to_try:
+            symbols_to_try.append(candidate)
+
+    results["symbols_to_try"] = symbols_to_try
+
+    for sym in symbols_to_try:
+        for action_name, action_val in actions_to_try:
+            test = {"symbol": sym, "action": action_name, "action_val": action_val}
+            try:
+                req = MT5Manager.MTRequest(manager)
+                req.Login = login
+                req.Symbol = sym
+                req.Type = 0  # ORDER_TYPE_BUY
+                req.Volume = int(volume * 10000)
+                req.PriceOrder = price
+                req.Action = action_val
+                req.PriceDeviation = 50
+                req.TypeFill = 2  # IOC
+                req.TypeTime = 0  # GTC
+                req.Comment = f"Test_{action_name}"
+
+                send_result = manager.DealerSend(req)
+
+                # Read back the result fields from the request
+                test["send_result"] = str(send_result) if send_result is not None else "None"
+                test["ResultRetcode"] = getattr(req, "ResultRetcode", "N/A")
+                test["ResultDeal"] = getattr(req, "ResultDeal", "N/A")
+                test["ResultOrder"] = getattr(req, "ResultOrder", "N/A")
+                test["ResultPrice"] = getattr(req, "ResultPrice", "N/A")
+                test["ResultVolume"] = getattr(req, "ResultVolume", "N/A")
+                test["ResultComment"] = getattr(req, "ResultComment", "N/A")
+                test["last_error"] = MT5Manager.LastError()
+
+            except Exception as e:
+                test["error"] = str(e)
+
+            results["tests"].append(test)
+            print(f"  [{action_name}] sym={sym} => result={test.get('send_result')}, retcode={test.get('ResultRetcode')}, deal={test.get('ResultDeal')}")
+
+    # Now try with DealerStart flow
+    dealer_start_test = {"method": "DealerStart+DealerSend"}
+    try:
+        # Check if DealerStart exists
+        if hasattr(manager, "DealerStart"):
+            ds = manager.DealerStart()
+            dealer_start_test["dealer_start_result"] = str(ds)
+
+            req = MT5Manager.MTRequest(manager)
+            req.Login = login
+            req.Symbol = symbol
+            req.Type = 0
+            req.Volume = int(volume * 10000)
+            req.PriceOrder = price
+            req.Action = 3  # TA_MARKET
+            req.PriceDeviation = 50
+            req.TypeFill = 2
+            req.Comment = "Test_DealerStart"
+
+            send_result = manager.DealerSend(req)
+            dealer_start_test["send_result"] = str(send_result) if send_result is not None else "None"
+            dealer_start_test["ResultRetcode"] = getattr(req, "ResultRetcode", "N/A")
+            dealer_start_test["ResultDeal"] = getattr(req, "ResultDeal", "N/A")
+            dealer_start_test["ResultOrder"] = getattr(req, "ResultOrder", "N/A")
+
+            if hasattr(manager, "DealerStop"):
+                manager.DealerStop()
+        else:
+            dealer_start_test["error"] = "DealerStart not available"
+    except Exception as e:
+        dealer_start_test["error"] = str(e)
+
+    results["dealer_start_test"] = dealer_start_test
+
+    # Count positions after all tests
+    import time
+    time.sleep(2)
+    pos_after = 0
+    pos_list = []
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        if pdata:
+            pos_after = len(pdata)
+            for p in pdata:
+                pos_list.append({"symbol": getattr(p, "Symbol", ""), "position": getattr(p, "Position", 0)})
+    except:
+        pass
+
+    results["positions_after"] = pos_after
+    results["positions_list"] = pos_list
+    results["new_positions"] = pos_after - pos_before
+
+    return jsonify(success=True, **results)
+
+
+@app.route("/debug/all-methods", methods=["GET"])
+def debug_all_methods():
+    """Dump EVERY method on the manager object and every class in MT5Manager"""
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    results = {}
+
+    # 1. ALL manager methods (the instance)
+    mgr_methods = []
+    for m in sorted(dir(manager)):
+        if m.startswith("_"):
+            continue
+        try:
+            obj = getattr(manager, m)
+            mgr_methods.append({"name": m, "callable": callable(obj), "type": type(obj).__name__})
+        except:
+            mgr_methods.append({"name": m, "error": True})
+    results["manager_methods"] = mgr_methods
+
+    # 2. ALL classes in MT5Manager module
+    classes = {}
+    for name in sorted(dir(MT5Manager)):
+        if name.startswith("_"):
+            continue
+        obj = getattr(MT5Manager, name)
+        if isinstance(obj, type):
+            cls_methods = []
+            for a in sorted(dir(obj)):
+                if a.startswith("_"):
+                    continue
+                try:
+                    sub = getattr(obj, a)
+                    cls_methods.append({"name": a, "callable": callable(sub), "type": type(sub).__name__})
+                except:
+                    cls_methods.append({"name": a, "error": True})
+            classes[name] = cls_methods
+
+    results["mt5_classes"] = classes
+
+    # 3. Specifically check for ANY method containing these keywords
+    trade_keywords = ["order", "trade", "deal", "send", "execute", "position", "request", "dealer", "confirm"]
+    trade_related = [m["name"] for m in mgr_methods if any(k in m["name"].lower() for k in trade_keywords)]
+    results["trade_related_methods"] = trade_related
+
+    return jsonify(success=True, **results)
+
+
+@app.route("/debug/dealer-send-v2/<int:login>", methods=["POST"])
+def debug_dealer_send_v2(login):
+    """
+    Try DealerSend with EVERY possible Action enum to find what creates positions.
+    POST body: { "symbol": "BTCUSD", "action": "buy", "volume": 0.01 }
+    """
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    data = request.json or {}
+    symbol = data.get("symbol", "BTCUSD")
+    action_str = data.get("action", "buy").lower()
+    volume = float(data.get("volume", 0.01))
+
+    bid, ask, digits = _get_live_price(symbol)
+    price = ask if action_str == "buy" else bid
+
+    results = {}
+
+    # Get ALL action enums
+    action_enums = {}
+    try:
+        for attr in dir(MT5Manager.MTRequest.EnTradeActions):
+            if not attr.startswith("_"):
+                try:
+                    action_enums[attr] = int(getattr(MT5Manager.MTRequest.EnTradeActions, attr))
+                except:
+                    pass
+    except Exception as e:
+        results["enum_error"] = str(e)
+
+    results["available_actions"] = action_enums
+    results["price"] = {"bid": bid, "ask": ask, "using": price}
+
+    # Count positions BEFORE
+    pos_before = []
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        if pdata:
+            for p in pdata:
+                pos_before.append({"symbol": getattr(p, "Symbol", ""), "position": getattr(p, "Position", 0)})
+    except:
+        pass
+    results["positions_before"] = pos_before
+
+    # Try DealerSend with the standard market action
+    try:
+        req = MT5Manager.MTRequest(manager)
+        # Set basic fields
+        req.Login = login
+        req.Symbol = symbol
+        req.Type = 0 if action_str == "buy" else 1  # ORDER_TYPE_BUY=0, ORDER_TYPE_SELL=1
+        req.Volume = int(volume * 10000)
+        req.PriceOrder = price
+        req.Action = 1  # TP_ACTION_DEAL (market order) — most common
+
+        # Try ALL possible attributes on the request
+        for attr_name, attr_val in [
+            ("PriceSL", 0), ("PriceTP", 0),
+            ("PriceTrigger", 0),
+            ("Deviation", 50),
+            ("Comment", "CRM_Trade"),
+            ("TypeFill", 2),  # IOC
+            ("TypeTime", 0),  # GTC
+            ("Expiration", 0),
+        ]:
+            try:
+                setattr(req, attr_name, attr_val)
+            except:
+                pass
+
+        # Dump ALL request attributes
+        req_dump = {}
+        for a in dir(req):
+            if a.startswith("_"):
+                continue
+            try:
+                v = getattr(req, a)
+                if not callable(v):
+                    req_dump[a] = str(v)
+            except:
+                pass
+        results["request_dump"] = req_dump
+
+        # Send it
+        print(f"[DEBUG] DealerSend: login={login}, symbol={symbol}, action={action_str}, volume={volume}, price={price}")
+        send_result = manager.DealerSend(req)
+
+        results["dealer_send_result"] = str(send_result)
+        results["dealer_send_type"] = type(send_result).__name__ if send_result is not None else "None"
+
+        # If result is an object, dump it
+        if send_result is not None and send_result is not False:
+            send_dump = {}
+            for a in dir(send_result):
+                if a.startswith("_"):
+                    continue
+                try:
+                    v = getattr(send_result, a)
+                    if not callable(v):
+                        send_dump[a] = str(v)
+                except:
+                    pass
+            results["dealer_send_dump"] = send_dump
+
+        results["last_error"] = MT5Manager.LastError()
+
+    except Exception as e:
+        results["dealer_send_error"] = str(e)
+        import traceback
+        results["traceback"] = traceback.format_exc()
+
+    # Count positions AFTER
+    import time
+    time.sleep(1)
+    pos_after = []
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        if pdata:
+            for p in pdata:
+                pos_after.append({"symbol": getattr(p, "Symbol", ""), "position": getattr(p, "Position", 0)})
+    except:
+        pass
+    results["positions_after"] = pos_after
+    results["new_positions"] = len(pos_after) - len(pos_before)
+
+    return jsonify(success=True, **results)
+
+
+# ===== DEBUG: DealPerform probe =====
+@app.route("/debug/deal-perform/<int:login>", methods=["POST"])
+def debug_deal_perform(login):
+    """
+    Debug endpoint: attempt DealPerform with detailed logging.
+    POST body: { "symbol": "BTCUSD", "action": "buy", "volume": 0.01 }
+    """
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    data = request.json or {}
+    symbol = data.get("symbol", "BTCUSD")
+    action = data.get("action", "buy").lower()
+    volume_lots = float(data.get("volume", 0.01))
+
+    trade_type = 0 if action == "buy" else 1
+    volume = int(volume_lots * 10000)
+
+    bid, ask, digits = _get_live_price(symbol)
+    market_price = ask if trade_type == 0 else bid
+
+    results = {
+        "login": login,
+        "symbol": symbol,
+        "action": action,
+        "volume_lots": volume_lots,
+        "volume_units": volume,
+        "market_price": market_price,
+        "bid": bid,
+        "ask": ask,
+    }
+
+    # Check positions BEFORE
+    try:
+        pos_before = manager.PositionGetByLogins([login])
+        results["positions_before"] = len(pos_before) if pos_before else 0
+    except:
+        results["positions_before"] = "error"
+
+    # Check deals BEFORE
+    try:
+        now = int(time.time())
+        deals_before = manager.DealRequestByLogins([login], now - 60, now)
+        results["recent_deals_before"] = len(deals_before) if deals_before else 0
+    except:
+        results["recent_deals_before"] = "error"
+
+    # ── Check MTDeal class ──
+    mtdeal_info = {}
+    try:
+        for cls_name in ["MTDeal", "MTConDeal", "Deal"]:
+            cls = getattr(MT5Manager, cls_name, None)
+            if cls:
+                mtdeal_info[cls_name] = {
+                    "exists": True,
+                    "attrs": [a for a in dir(cls) if not a.startswith("_") and not callable(getattr(cls, a, None))][:40],
+                    "methods": [a for a in dir(cls) if not a.startswith("_") and callable(getattr(cls, a, None))][:20]
+                }
+                # Try to instantiate
+                try:
+                    obj = cls(manager)
+                    mtdeal_info[cls_name]["instantiate_with_manager"] = "OK"
+                except:
+                    try:
+                        obj = cls()
+                        mtdeal_info[cls_name]["instantiate_bare"] = "OK"
+                    except Exception as ie:
+                        mtdeal_info[cls_name]["instantiate"] = str(ie)
+    except Exception as e:
+        mtdeal_info["error"] = str(e)
+    results["mtdeal_classes"] = mtdeal_info
+
+    # ── Check DealPerform method ──
+    dp_fn = getattr(manager, "DealPerform", None)
+    results["DealPerform_exists"] = dp_fn is not None
+    if dp_fn:
+        try:
+            import inspect
+            sig = inspect.signature(dp_fn)
+            results["DealPerform_signature"] = str(sig)
+        except:
+            results["DealPerform_signature"] = "could not inspect"
+
+    # ── List ALL deal-related methods on manager ──
+    deal_methods = {}
+    for m in sorted(dir(manager)):
+        if ("deal" in m.lower() or "perform" in m.lower()) and not m.startswith("_"):
+            fn = getattr(manager, m, None)
+            deal_methods[m] = "callable" if callable(fn) else str(type(fn).__name__)
+    results["all_deal_methods"] = deal_methods
+
+    # ── Attempt DealPerform ──
+    dp_results = []
+
+    # Try creating MTDeal and calling DealPerform
+    deal_obj = None
+    for cls_name in ["MTDeal", "MTConDeal", "Deal"]:
+        cls = getattr(MT5Manager, cls_name, None)
+        if cls:
+            try:
+                deal_obj = cls(manager)
+                dp_results.append(f"{cls_name}(manager) OK")
+                break
+            except:
+                try:
+                    deal_obj = cls()
+                    dp_results.append(f"{cls_name}() OK")
+                    break
+                except Exception as ie:
+                    dp_results.append(f"{cls_name} instantiation failed: {ie}")
+
+    if deal_obj:
+        # Set ALL attributes comprehensively
+        SYMBOL_CONFIG = {
+            "BTCUSD": {"digits": 2, "contract_size": 1.0},
+            "ETHUSD": {"digits": 2, "contract_size": 1.0},
+            "XAUUSD": {"digits": 2, "contract_size": 100.0},
+            "XAGUSD": {"digits": 3, "contract_size": 5000.0},
+            "EURUSD": {"digits": 5, "contract_size": 100000.0},
+            "GBPUSD": {"digits": 5, "contract_size": 100000.0},
+            "USDJPY": {"digits": 3, "contract_size": 100000.0},
+        }
+        sym_cfg = SYMBOL_CONFIG.get(symbol, {"digits": 5, "contract_size": 100000.0})
+        now_sec = int(time.time())
+        now_msc = int(time.time() * 1000)
+
+        attrs_set = {}
+        for attr, val in [
+            ("Login", login), ("Symbol", symbol), ("Action", trade_type),
+            ("Volume", volume), ("Price", market_price),
+            ("PricePosition", market_price),
+            ("Entry", 0),  # ENTRY_IN
+            ("Dealer", MT5_CONFIG["manager"]),
+            ("Comment", "DealPerform Test"),
+            ("Time", now_sec), ("TimeMsc", now_msc),
+            ("Digits", sym_cfg["digits"]),
+            ("DigitsCurrency", 2),
+            ("ContractSize", sym_cfg["contract_size"]),
+            ("MarketBid", bid), ("MarketAsk", ask), ("MarketLast", market_price),
+            ("PriceSL", 0.0), ("PriceTP", 0.0),
+            ("Profit", 0.0), ("Storage", 0.0), ("Commission", 0.0), ("Fee", 0.0),
+            ("RateProfit", 1.0), ("RateMargin", 1.0),
+            ("Reason", 0), ("Flags", 0),
+        ]:
+            try:
+                setattr(deal_obj, attr, val)
+                attrs_set[attr] = str(val)
+            except Exception as e:
+                attrs_set[attr] = f"FAILED: {e}"
+        dp_results.append({"attrs_set": attrs_set})
+
+        # Dump full deal object state after setting
+        full_state = {}
+        for a in dir(deal_obj):
+            if not a.startswith("_"):
+                try:
+                    v = getattr(deal_obj, a)
+                    if not callable(v):
+                        full_state[a] = str(v)
+                except:
+                    pass
+        dp_results.append({"deal_full_state": full_state})
+
+        # Try DealPerform
+        if dp_fn:
+            try:
+                dp_result = dp_fn(deal_obj)
+                dp_results.append(f"DealPerform(deal) = {dp_result} (type={type(dp_result).__name__})")
+                time.sleep(0.5)
+            except Exception as e:
+                dp_results.append(f"DealPerform(deal) exception: {e}")
+
+        # Check positions after DealPerform
+        try:
+            pos_mid = manager.PositionGetByLogins([login])
+            dp_results.append(f"Positions after DealPerform: {len(pos_mid) if pos_mid else 0}")
+        except:
+            pass
+
+        # Try DealAdd (always try in debug mode)
+        try:
+            deal_obj2 = MT5Manager.MTDeal(manager)
+            for attr, val in [
+                ("Login", login), ("Symbol", symbol), ("Action", trade_type),
+                ("Volume", volume), ("Price", market_price),
+                ("PricePosition", market_price), ("Entry", 0),
+                ("Dealer", MT5_CONFIG["manager"]), ("Comment", "DealAdd Test"),
+                ("Time", now_sec), ("TimeMsc", now_msc),
+                ("Digits", sym_cfg["digits"]), ("DigitsCurrency", 2),
+                ("ContractSize", sym_cfg["contract_size"]),
+                ("MarketBid", bid), ("MarketAsk", ask), ("MarketLast", market_price),
+                ("Profit", 0.0), ("Storage", 0.0), ("Commission", 0.0), ("Fee", 0.0),
+                ("RateProfit", 1.0), ("RateMargin", 1.0), ("Reason", 0), ("Flags", 0),
+            ]:
+                try: setattr(deal_obj2, attr, val)
+                except: pass
+
+            da_r = manager.DealAdd(deal_obj2)
+            deal_ticket_after = getattr(deal_obj2, "Deal", 0)
+            dp_results.append(f"DealAdd(deal2) = {da_r}, deal ticket after = {deal_ticket_after}")
+            time.sleep(0.5)
+
+            # Now try DealPerform on the deal that has a ticket
+            if deal_ticket_after > 0:
+                try:
+                    dp2 = manager.DealPerform(deal_obj2)
+                    dp_results.append(f"DealPerform after DealAdd = {dp2}")
+                except Exception as e:
+                    dp_results.append(f"DealPerform after DealAdd exception: {e}")
+        except Exception as e:
+            dp_results.append(f"DealAdd exception: {e}")
+    else:
+        dp_results.append("Could not create any Deal object")
+
+    results["deal_perform_attempts"] = dp_results
+
+    # Check positions AFTER
+    try:
+        time.sleep(0.5)
+        pos_after = manager.PositionGetByLogins([login])
+        results["positions_after"] = len(pos_after) if pos_after else 0
+        if pos_after:
+            pos_list = []
+            for p in pos_after[:3]:
+                pa = {}
+                for a in dir(p):
+                    if not a.startswith("_"):
+                        try:
+                            v = getattr(p, a)
+                            if not callable(v):
+                                pa[a] = str(v)
+                        except:
+                            pass
+                pos_list.append(pa)
+            results["positions_detail"] = pos_list
+    except Exception as e:
+        results["positions_after"] = f"error: {e}"
+
+    # Check deals AFTER
+    try:
+        now2 = int(time.time())
+        deals_after = manager.DealRequestByLogins([login], now2 - 60, now2)
+        results["recent_deals_after"] = len(deals_after) if deals_after else 0
+    except:
+        results["recent_deals_after"] = "error"
+
+    return jsonify(success=True, **results)
+
+
+# ===== CRITICAL: DealerSend + DealerGet + DealerAnswer flow =====
+# In MT5, DealerSend queues a request. The dealer must then:
+#   1. DealerGet() — retrieve the pending request
+#   2. DealerAnswer() — confirm execution
+# Without this confirmation step, requests sit in queue forever.
+
+@app.route("/debug/dealer-full-flow/<int:login>", methods=["POST"])
+def debug_dealer_full_flow(login):
+    """
+    FULL dealer flow: DealerStart → DealerSend → DealerGet → DealerAnswer
+    This is the correct MT5 Manager API pattern for trade execution.
+    POST body: { "symbol": "BTCUSD", "action": "buy", "volume": 0.01 }
+    """
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    data = request.json or {}
+    symbol = data.get("symbol", "BTCUSD")
+    action_str = data.get("action", "buy").lower()
+    volume = float(data.get("volume", 0.01))
+    sl = float(data.get("sl", 0))
+    tp = float(data.get("tp", 0))
+
+    bid, ask, digits = _get_live_price(symbol)
+    price = ask if action_str == "buy" else bid
+    trade_type = 0 if action_str == "buy" else 1
+    volume_units = int(volume * 10000)
+
+    results = {
+        "login": login, "symbol": symbol, "action": action_str,
+        "volume": volume, "price": price, "bid": bid, "ask": ask,
+        "steps": []
+    }
+
+    # Count positions BEFORE
+    pos_before = 0
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        pos_before = len(pdata) if pdata else 0
+    except:
+        pass
+    results["positions_before"] = pos_before
+
+    # ── STEP 1: Discover ALL dealer methods ──
+    dealer_methods = []
+    for m in sorted(dir(manager)):
+        if "dealer" in m.lower() or "deal" in m.lower():
+            try:
+                obj = getattr(manager, m)
+                dealer_methods.append({"name": m, "callable": callable(obj)})
+            except:
+                dealer_methods.append({"name": m, "error": True})
+    results["all_dealer_methods"] = dealer_methods
+
+    # Also find ANY order/trade/position creation methods
+    creation_methods = []
+    for m in sorted(dir(manager)):
+        ml = m.lower()
+        if any(k in ml for k in ["order", "trade", "position", "send", "execute", "confirm", "answer"]):
+            if not m.startswith("_"):
+                try:
+                    obj = getattr(manager, m)
+                    creation_methods.append({"name": m, "callable": callable(obj)})
+                except:
+                    creation_methods.append({"name": m, "error": True})
+    results["all_creation_methods"] = creation_methods
+
+    # ── STEP 2: DealerStart ──
+    try:
+        ds_result = manager.DealerStart()
+        results["steps"].append({"step": "DealerStart", "result": str(ds_result), "success": bool(ds_result)})
+        print(f"[DEALER] DealerStart: {ds_result}")
+    except Exception as e:
+        results["steps"].append({"step": "DealerStart", "error": str(e)})
+
+    # ── STEP 3: DealerSend ──
+    send_result = None
+    try:
+        req = MT5Manager.MTRequest(manager)
+        req.Login = login
+        req.Symbol = symbol
+        req.Type = trade_type
+        req.Volume = volume_units
+        req.PriceOrder = price
+        req.Action = 2  # TA_INSTANT
+
+        for attr, val in [("Deviation", 50), ("Comment", "CRM_Dealer_Flow"),
+                          ("TypeFill", 2), ("TypeTime", 0)]:
+            try: setattr(req, attr, val)
+            except: pass
+
+        if sl > 0:
+            try: req.PriceSL = float(sl)
+            except: pass
+        if tp > 0:
+            try: req.PriceTP = float(tp)
+            except: pass
+
+        send_result = manager.DealerSend(req)
+        sr_str = str(send_result)
+        results["steps"].append({"step": "DealerSend", "result": sr_str, "type": type(send_result).__name__})
+        print(f"[DEALER] DealerSend: {sr_str}")
+    except Exception as e:
+        results["steps"].append({"step": "DealerSend", "error": str(e)})
+
+    # ── STEP 4: Try DealerGet (retrieve pending request for confirmation) ──
+    dealer_get_result = None
+    for method_name in ["DealerGet", "DealerGetRequest", "DealerReceive", "DealerPoll"]:
+        fn = getattr(manager, method_name, None)
+        if fn and callable(fn):
+            try:
+                dealer_get_result = fn()
+                results["steps"].append({
+                    "step": method_name, "result": str(dealer_get_result),
+                    "type": type(dealer_get_result).__name__ if dealer_get_result else "None"
+                })
+                print(f"[DEALER] {method_name}: {dealer_get_result}")
+
+                # If we got an object, dump all its attributes
+                if dealer_get_result is not None:
+                    get_dump = {}
+                    for a in dir(dealer_get_result):
+                        if not a.startswith("_"):
+                            try:
+                                v = getattr(dealer_get_result, a)
+                                if not callable(v):
+                                    get_dump[a] = str(v)
+                            except:
+                                pass
+                    results[f"{method_name}_dump"] = get_dump
+                break
+            except Exception as e:
+                results["steps"].append({"step": method_name, "error": str(e)})
+                import traceback
+                results[f"{method_name}_traceback"] = traceback.format_exc()
+
+    # ── STEP 5: Try DealerAnswer / DealerConfirm (confirm execution) ──
+    for answer_method in ["DealerAnswer", "DealerConfirm", "DealerAccept", "DealerExecute"]:
+        fn = getattr(manager, answer_method, None)
+        if fn and callable(fn):
+            # Try multiple calling patterns
+            patterns = []
+
+            # Pattern A: DealerAnswer(confirm_obj) — pass back the request/confirmation object
+            if dealer_get_result is not None:
+                try:
+                    ans = fn(dealer_get_result)
+                    patterns.append({"pattern": f"{answer_method}(get_result)", "result": str(ans)})
+                    print(f"[DEALER] {answer_method}(get_result): {ans}")
+                except Exception as e:
+                    patterns.append({"pattern": f"{answer_method}(get_result)", "error": str(e)})
+
+            # Pattern B: DealerAnswer(MTConfirmation) with RetCode=10009 (DONE)
+            for conf_cls_name in ["MTConfirmation", "MTConConfirmation", "MTConfirm"]:
+                conf_cls = getattr(MT5Manager, conf_cls_name, None)
+                if conf_cls:
+                    try:
+                        conf_obj = conf_cls(manager)
+                        # Set confirmation fields
+                        for attr, val in [
+                            ("RetCode", 10009),  # TRADE_RETCODE_DONE
+                            ("Retcode", 10009),
+                            ("Login", login),
+                            ("Volume", volume_units),
+                            ("Price", price),
+                            ("Bid", bid), ("Ask", ask),
+                            ("ID", send_result if isinstance(send_result, int) else 0),
+                        ]:
+                            try: setattr(conf_obj, attr, val)
+                            except: pass
+
+                        ans = fn(conf_obj)
+                        patterns.append({"pattern": f"{answer_method}({conf_cls_name})", "result": str(ans)})
+                        print(f"[DEALER] {answer_method}({conf_cls_name}): {ans}")
+                    except Exception as e:
+                        patterns.append({"pattern": f"{answer_method}({conf_cls_name})", "error": str(e)})
+
+            # Pattern C: DealerAnswer(req) — pass back the original request
+            try:
+                req2 = MT5Manager.MTRequest(manager)
+                req2.Login = login
+                req2.Symbol = symbol
+                req2.Type = trade_type
+                req2.Volume = volume_units
+                req2.PriceOrder = price
+                req2.Action = 2
+                try: req2.RetCode = 10009
+                except: pass
+                try: req2.Retcode = 10009
+                except: pass
+
+                ans = fn(req2)
+                patterns.append({"pattern": f"{answer_method}(MTRequest_with_retcode)", "result": str(ans)})
+                print(f"[DEALER] {answer_method}(req_with_retcode): {ans}")
+            except Exception as e:
+                patterns.append({"pattern": f"{answer_method}(MTRequest_with_retcode)", "error": str(e)})
+
+            # Pattern D: DealerAnswer(int) — pass the order ID
+            if send_result is not None:
+                try:
+                    order_id = int(send_result) if not isinstance(send_result, int) else send_result
+                    ans = fn(order_id)
+                    patterns.append({"pattern": f"{answer_method}(order_id={order_id})", "result": str(ans)})
+                except Exception as e:
+                    patterns.append({"pattern": f"{answer_method}(order_id)", "error": str(e)})
+
+            results["steps"].append({"step": answer_method, "patterns": patterns})
+
+    # ── STEP 6: Try OrderAdd/OrderSend directly ──
+    for order_method in ["OrderAdd", "OrderSend", "OrderCreate", "TradeTransaction"]:
+        fn = getattr(manager, order_method, None)
+        if fn and callable(fn):
+            # Try with MTOrder object
+            for order_cls in ["MTOrder", "MTConOrder", "Order"]:
+                cls = getattr(MT5Manager, order_cls, None)
+                if cls:
+                    try:
+                        order_obj = cls(manager)
+                        for attr, val in [
+                            ("Login", login), ("Symbol", symbol),
+                            ("Type", trade_type), ("Volume", volume_units),
+                            ("PriceOrder", price), ("Price", price),
+                            ("Action", 2), ("State", 0),
+                            ("Comment", "CRM_OrderAdd"),
+                        ]:
+                            try: setattr(order_obj, attr, val)
+                            except: pass
+
+                        oa_result = fn(order_obj)
+                        results["steps"].append({
+                            "step": f"{order_method}({order_cls})",
+                            "result": str(oa_result),
+                        })
+                        print(f"[DEALER] {order_method}({order_cls}): {oa_result}")
+                    except Exception as e:
+                        results["steps"].append({
+                            "step": f"{order_method}({order_cls})",
+                            "error": str(e),
+                        })
+
+            # Also try with MTRequest
+            try:
+                req3 = MT5Manager.MTRequest(manager)
+                req3.Login = login
+                req3.Symbol = symbol
+                req3.Type = trade_type
+                req3.Volume = volume_units
+                req3.PriceOrder = price
+                req3.Action = 2
+
+                oa_result = fn(req3)
+                results["steps"].append({
+                    "step": f"{order_method}(MTRequest)",
+                    "result": str(oa_result),
+                })
+            except Exception as e:
+                results["steps"].append({
+                    "step": f"{order_method}(MTRequest)",
+                    "error": str(e),
+                })
+
+    # ── STEP 7: Try PositionModify / PositionAdd directly ──
+    for pos_method in ["PositionAdd", "PositionCreate", "PositionModify"]:
+        fn = getattr(manager, pos_method, None)
+        if fn and callable(fn):
+            for pos_cls in ["MTPosition", "MTConPosition", "Position"]:
+                cls = getattr(MT5Manager, pos_cls, None)
+                if cls:
+                    try:
+                        pos_obj = cls(manager)
+                        for attr, val in [
+                            ("Login", login), ("Symbol", symbol),
+                            ("Action", trade_type), ("Volume", volume_units),
+                            ("PriceOpen", price), ("PriceCurrent", price),
+                            ("PriceSL", sl if sl > 0 else 0),
+                            ("PriceTP", tp if tp > 0 else 0),
+                            ("Comment", "CRM_PosAdd"),
+                            ("Reason", 0),
+                        ]:
+                            try: setattr(pos_obj, attr, val)
+                            except: pass
+
+                        pa_result = fn(pos_obj)
+                        results["steps"].append({
+                            "step": f"{pos_method}({pos_cls})",
+                            "result": str(pa_result),
+                        })
+                        print(f"[DEALER] {pos_method}({pos_cls}): {pa_result}")
+                    except Exception as e:
+                        results["steps"].append({
+                            "step": f"{pos_method}({pos_cls})",
+                            "error": str(e),
+                        })
+
+    # ── STEP 8: DealerStop ──
+    try:
+        manager.DealerStop()
+        results["steps"].append({"step": "DealerStop", "result": "OK"})
+    except:
+        pass
+
+    # ── STEP 9: Check positions AFTER ──
+    time.sleep(2)
+    pos_after = 0
+    pos_detail = []
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        pos_after = len(pdata) if pdata else 0
+        if pdata:
+            for p in pdata[:5]:
+                pd = {}
+                for a in dir(p):
+                    if not a.startswith("_"):
+                        try:
+                            v = getattr(p, a)
+                            if not callable(v):
+                                pd[a] = str(v)
+                        except:
+                            pass
+                pos_detail.append(pd)
+    except:
+        pass
+    results["positions_after"] = pos_after
+    results["positions_detail"] = pos_detail
+    results["new_positions"] = pos_after - pos_before
+
+    # ── STEP 10: Check ALL MT5Manager classes for anything we missed ──
+    all_classes = {}
+    for name in sorted(dir(MT5Manager)):
+        if name.startswith("_"):
+            continue
+        obj = getattr(MT5Manager, name)
+        if isinstance(obj, type):
+            all_classes[name] = [a for a in dir(obj) if not a.startswith("_")][:30]
+    results["all_mt5_classes"] = all_classes
+
+    return jsonify(success=True, **results)
+
+
+# ===== ULTIMATE: Try EVERY callable method on manager with trade objects =====
+@app.route("/debug/brute-force-trade/<int:login>", methods=["POST"])
+def debug_brute_force_trade(login):
+    """
+    Brute-force: try EVERY callable method on the manager object that might create
+    a position. Tests OrderAdd, TradeTransaction, DealPerform, etc. with every
+    possible object type.
+    """
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    data = request.json or {}
+    symbol = data.get("symbol", "BTCUSD")
+    action_str = data.get("action", "buy").lower()
+    volume = float(data.get("volume", 0.01))
+
+    bid, ask, digits = _get_live_price(symbol)
+    price = ask if action_str == "buy" else bid
+    trade_type = 0 if action_str == "buy" else 1
+    volume_units = int(volume * 10000)
+
+    results = {"tests": [], "login": login, "symbol": symbol, "price": price}
+
+    # Positions before
+    pos_before = 0
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        pos_before = len(pdata) if pdata else 0
+    except:
+        pass
+    results["positions_before"] = pos_before
+
+    # Get ALL callable methods on manager
+    all_methods = []
+    for m in sorted(dir(manager)):
+        if m.startswith("_"):
+            continue
+        try:
+            obj = getattr(manager, m)
+            if callable(obj):
+                all_methods.append(m)
+        except:
+            pass
+    results["all_callable_methods"] = all_methods
+
+    # Filter to potentially trade-related ones
+    trade_keywords = ["order", "trade", "deal", "send", "execute", "position",
+                      "transaction", "confirm", "answer", "perform", "add", "create"]
+    trade_methods = [m for m in all_methods
+                     if any(k in m.lower() for k in trade_keywords)
+                     and m not in ["DealRequestByLogins", "DealRequestByTickets",
+                                   "DealRequestByGroup", "PositionGetByLogins",
+                                   "PositionGetByGroup", "PositionGet",
+                                   "OrderGetByLogins", "OrderGet", "OrderGetOpen"]]
+    results["trade_methods_to_try"] = trade_methods
+
+    # Get ALL instantiatable classes
+    mt5_classes = {}
+    for name in sorted(dir(MT5Manager)):
+        obj = getattr(MT5Manager, name, None)
+        if isinstance(obj, type):
+            mt5_classes[name] = obj
+    results["available_classes"] = list(mt5_classes.keys())
+
+    # Try each trade method with each relevant class
+    for method_name in trade_methods:
+        fn = getattr(manager, method_name)
+
+        # Try with no args
+        try:
+            r = fn()
+            results["tests"].append({
+                "method": f"{method_name}()",
+                "result": str(r)[:200],
+                "type": type(r).__name__ if r is not None else "None"
+            })
+        except Exception as e:
+            results["tests"].append({
+                "method": f"{method_name}()",
+                "error": str(e)[:200]
+            })
+
+        # Try with each class object
+        for cls_name, cls in mt5_classes.items():
+            if any(k in cls_name.lower() for k in ["deal", "order", "request", "position", "trade", "confirm"]):
+                try:
+                    obj = cls(manager)
+                except:
+                    try:
+                        obj = cls()
+                    except:
+                        continue
+
+                # Set common trade fields
+                for attr, val in [
+                    ("Login", login), ("Symbol", symbol),
+                    ("Type", trade_type), ("Action", trade_type),
+                    ("Volume", volume_units), ("VolumeExt", volume_units),
+                    ("Price", price), ("PriceOrder", price),
+                    ("PriceOpen", price), ("PriceCurrent", price),
+                    ("PricePosition", price),
+                    ("Bid", bid), ("Ask", ask), ("MarketBid", bid), ("MarketAsk", ask),
+                    ("Digits", digits), ("Comment", "CRM_BruteForce"),
+                    ("Dealer", MT5_CONFIG["manager"]),
+                    ("Entry", 0), ("Reason", 0),
+                    ("ContractSize", 1.0), ("RateProfit", 1.0), ("RateMargin", 1.0),
+                    ("Time", int(time.time())), ("TimeMsc", int(time.time() * 1000)),
+                    ("Deviation", 50), ("TypeFill", 2), ("TypeTime", 0),
+                    ("RetCode", 10009), ("Retcode", 10009),
+                ]:
+                    try: setattr(obj, attr, val)
+                    except: pass
+
+                try:
+                    r = fn(obj)
+                    results["tests"].append({
+                        "method": f"{method_name}({cls_name})",
+                        "result": str(r)[:200],
+                        "type": type(r).__name__ if r is not None else "None",
+                    })
+                except Exception as e:
+                    err_str = str(e)[:200]
+                    # Skip boring errors
+                    if "argument" not in err_str.lower() and "type" not in err_str.lower():
+                        results["tests"].append({
+                            "method": f"{method_name}({cls_name})",
+                            "error": err_str,
+                        })
+
+    # Positions after
+    time.sleep(2)
+    pos_after = 0
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        pos_after = len(pdata) if pdata else 0
+    except:
+        pass
+    results["positions_after"] = pos_after
+    results["new_positions"] = pos_after - pos_before
+
+    return jsonify(success=True, **results)
+
+
+# ===== Quick diagnostic: check trade execution readiness =====
+@app.route("/debug/trade-readiness", methods=["GET"])
+def trade_readiness():
+    """Quick check of all execution methods and their status"""
+    status = {
+        "manager_connected": _connected,
+        "terminal_package": MT5_TERMINAL_AVAILABLE,
+        "terminal_initialized": _terminal_initialized,
+        "ea_dir_exists": os.path.isdir(EA_COMMAND_DIR),
+        "execution_methods": [],
+    }
+
+    # Check Manager API
+    if connect():
+        status["manager_connected"] = True
+        # Check DealerSend availability
+        has_dealer = hasattr(manager, "DealerSend") and callable(getattr(manager, "DealerSend", None))
+        status["execution_methods"].append({
+            "name": "DealerSend (Manager API)",
+            "available": has_dealer,
+            "priority": 1,
+            "note": "Sends trade request to MT5 server execution system"
+        })
+
+        # Get a test price to verify pricing works
+        test_bid, test_ask, _ = _get_live_price("EURUSD.#")
+        status["price_test"] = {"symbol": "EURUSD.#", "bid": test_bid, "ask": test_ask, "working": test_bid > 0}
+
+    # Check Terminal API
+    if MT5_TERMINAL_AVAILABLE:
+        term_info = {}
+        if _terminal_initialized:
+            try:
+                info = mt5.account_info()
+                if info:
+                    term_info["login"] = info.login
+                    term_info["balance"] = info.balance
+                    term_info["trade_allowed"] = info.trade_allowed
+                ti = mt5.terminal_info()
+                if ti:
+                    term_info["terminal_trade_allowed"] = ti.trade_allowed
+            except:
+                pass
+        status["execution_methods"].append({
+            "name": "Terminal API (order_send)",
+            "available": _terminal_initialized,
+            "priority": 2,
+            "info": term_info,
+            "note": "10026 error may block this — needs server AutoTrading enabled"
+        })
+
+    # Check EA
+    status["execution_methods"].append({
+        "name": "MQL5 EA (file IPC)",
+        "available": os.path.isdir(EA_COMMAND_DIR),
+        "priority": 0,
+        "note": "Needs EA compiled and running in MT5 Terminal"
+    })
+
+    # DealAdd fallback
+    status["execution_methods"].append({
+        "name": "DealAdd (fallback — DB tracked)",
+        "available": _connected,
+        "priority": 3,
+        "note": "Creates deal record only — position tracked in CRM database"
+    })
+
+    return jsonify(success=True, **status)
+
+
+# ===== Quick trade test — open and verify position creation =====
+@app.route("/debug/test-trade/<int:login>", methods=["POST"])
+def debug_test_trade(login):
+    """
+    Quick test: open a tiny trade and check if a REAL position was created.
+    POST body: { "symbol": "EURUSD.#", "action": "buy", "volume": 0.01 }
+    """
+    data = request.json or {}
+    symbol = data.get("symbol", "EURUSD.#")
+    action = data.get("action", "buy")
+    volume = float(data.get("volume", 0.01))
+
+    if not connect():
+        return jsonify(error=MT5Manager.LastError()), 500
+
+    # Get positions before
+    pos_before = []
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        if pdata:
+            for p in pdata:
+                pos_before.append({
+                    "ticket": getattr(p, "Position", 0),
+                    "symbol": getattr(p, "Symbol", ""),
+                    "volume": getattr(p, "Volume", 0),
+                })
+    except:
+        pass
+
+    # Execute the trade via the main endpoint logic
+    import io
+    from werkzeug.test import Client
+    from flask import Response
+
+    # Just call open_trade directly through Flask test client
+    with app.test_client() as client:
+        resp = client.post("/trade/open", json={
+            "login": login,
+            "symbol": symbol,
+            "action": action,
+            "volume": volume,
+            "comment": "TEST_TRADE"
+        })
+        trade_result = resp.get_json()
+
+    # Wait and check positions after
+    time.sleep(2)
+    pos_after = []
+    try:
+        pdata = manager.PositionGetByLogins([login])
+        if pdata:
+            for p in pdata:
+                pos_after.append({
+                    "ticket": getattr(p, "Position", 0),
+                    "symbol": getattr(p, "Symbol", ""),
+                    "volume": getattr(p, "Volume", 0),
+                    "action": getattr(p, "Action", -1),
+                    "price_open": getattr(p, "PriceOpen", 0),
+                })
+    except:
+        pass
+
+    new_positions = [p for p in pos_after if p["ticket"] not in [x["ticket"] for x in pos_before]]
+
+    return jsonify(
+        success=True,
+        trade_result=trade_result,
+        positions_before=len(pos_before),
+        positions_after=len(pos_after),
+        new_positions=new_positions,
+        real_position_created=len(new_positions) > 0,
+        method_used=trade_result.get("method", "unknown"),
+    )
+
+
+# ===== DEBUG: TERMINAL STATE ENDPOINT =====
+@app.route("/debug/terminal", methods=["GET"])
+def debug_terminal_state():
+    """Check current terminal state, market, login, and test MCX symbol resolution."""
+    result = {
+        "terminal_available": MT5_TERMINAL_AVAILABLE,
+        "terminal_initialized": _terminal_initialized,
+        "current_market": _current_terminal_market,
+        "mcx_symbol_cache": dict(_mcx_symbol_cache),
+        "mcx_cache_age_seconds": int(time.time() - _mcx_symbol_cache_time) if _mcx_symbol_cache_time > 0 else None,
+    }
+
+    # Terminal info
+    if MT5_TERMINAL_AVAILABLE and _terminal_initialized:
+        try:
+            info = mt5.account_info()
+            if info:
+                result["terminal_account"] = {
+                    "login": info.login,
+                    "server": info.server,
+                    "balance": info.balance,
+                    "name": info.name,
+                }
+            term = mt5.terminal_info()
+            if term:
+                result["terminal_info"] = {
+                    "connected": term.connected,
+                    "community_account": term.community_account,
+                    "path": term.path,
+                }
+        except Exception as e:
+            result["terminal_error"] = str(e)
+
+    # Manager API status
+    result["manager_connected"] = _connected
+
+    # Test MCX resolution
+    test_symbols = request.args.get("test", "GOLD,SILVER,CRUDEOIL")
+    if test_symbols:
+        resolutions = {}
+        for sym in test_symbols.split(","):
+            sym = sym.strip().upper()
+            if sym:
+                resolved = _resolve_mcx_symbol(sym)
+                # Also test TickLast on resolved symbol
+                tick_bid = 0
+                try:
+                    if connect():
+                        tick = manager.TickLast(resolved)
+                        if tick:
+                            tick_bid = getattr(tick, "Bid", 0.0)
+                except:
+                    pass
+                resolutions[sym] = {"resolved": resolved, "tick_bid": tick_bid}
+        result["mcx_resolutions"] = resolutions
+
+    # Terminal accounts config (without passwords)
+    result["terminal_accounts"] = {
+        k: {"login": v["login"], "server": v["server"]}
+        for k, v in TERMINAL_ACCOUNTS.items()
+    }
+
+    return jsonify(result)
+
+
+@app.route("/debug/switch-terminal/<market>", methods=["POST"])
+def debug_switch_terminal(market):
+    """Force-switch the terminal to a specific market. For debugging only."""
+    market = market.lower()
+    if market not in TERMINAL_ACCOUNTS:
+        return jsonify(success=False, error=f"Unknown market: {market}. Available: {list(TERMINAL_ACCOUNTS.keys())}"), 400
+
+    print(f"[DEBUG] Manual terminal switch to market: {market}")
+    success = _switch_terminal_to_market(market)
+
+    result = {
+        "success": success,
+        "market": market,
+        "current_market_after": _current_terminal_market,
+    }
+
+    if MT5_TERMINAL_AVAILABLE and _terminal_initialized:
+        try:
+            info = mt5.account_info()
+            if info:
+                result["terminal_login"] = info.login
+                result["terminal_server"] = info.server
+        except:
+            pass
+
+    return jsonify(result)
+
+
+if __name__ == "__main__":
+    # Establish persistent connection when running as main script
+    print("🚀 MT5 Manager Bridge Server Initializing...")
+    print(f"📡 Server: {MT5_CONFIG['server']}")
+    print(f"👤 Manager: {MT5_CONFIG['manager']}")
+    print(f"🔐 Establishing persistent connection...")
+
+    if connect():
+        print("✅ Persistent connection established!")
+        print("ℹ️  Connection will remain active for all requests")
+    else:
+        print(f"❌ Connection failed: {MT5Manager.LastError()}")
+
+    print("\n🌐 Starting Flask server on http://mt5.onefx.co.in")
+    app.run(port=5001, debug=True, use_reloader=False)

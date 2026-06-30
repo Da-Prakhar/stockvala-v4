@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+*.zip
+*.env
+*.env.*
+!.env.example
+test logs*
+uploads
+dist
+.DS_Store

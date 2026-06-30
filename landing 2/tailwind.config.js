@@ -1,0 +1,136 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: '#f0f5ff',
+          100: '#e0ebff',
+          200: '#c1d7ff',
+          300: '#a2c3ff',
+          400: '#6699ff',
+          500: '#0066FF',
+          600: '#0052cc',
+          700: '#003d99',
+          800: '#002966',
+          900: '#001533',
+        },
+        secondary: {
+          50: '#e0f9ff',
+          100: '#b3f0ff',
+          200: '#80e7ff',
+          300: '#4ddeff',
+          400: '#1ad5ff',
+          500: '#00D4FF',
+          600: '#00aacc',
+          700: '#008099',
+          800: '#005666',
+          900: '#002b33',
+        },
+        accent: {
+          50: '#fffef0',
+          100: '#fffde0',
+          200: '#fffbc1',
+          300: '#fff9a2',
+          400: '#fff766',
+          500: '#FFD700',
+          600: '#cca900',
+          700: '#998100',
+          800: '#665900',
+          900: '#333000',
+        },
+        dark: {
+          950: '#0a0e17',
+          900: '#111827',
+          850: '#1a1f2e',
+          800: '#1f2639',
+          700: '#2d3748',
+        },
+        success: '#10b981',
+        danger: '#ef4444',
+        warning: '#f59e0b',
+      },
+      fontFamily: {
+        inter: ['Inter', 'sans-serif'],
+        'space-grotesk': ['Space Grotesk', 'sans-serif'],
+      },
+      fontSize: {
+        xs: ['12px', { lineHeight: '16px' }],
+        sm: ['14px', { lineHeight: '20px' }],
+        base: ['16px', { lineHeight: '24px' }],
+        lg: ['18px', { lineHeight: '28px' }],
+        xl: ['20px', { lineHeight: '28px' }],
+        '2xl': ['24px', { lineHeight: '32px' }],
+        '3xl': ['30px', { lineHeight: '36px' }],
+        '4xl': ['36px', { lineHeight: '40px' }],
+        '5xl': ['48px', { lineHeight: '56px' }],
+        '6xl': ['60px', { lineHeight: '72px' }],
+      },
+      animation: {
+        float: 'float 3s ease-in-out infinite',
+        glow: 'glow 3s ease-in-out infinite',
+        'slide-up': 'slideUp 0.6s ease-out',
+        'fade-in': 'fadeIn 0.6s ease-out',
+        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+        'gradient-shift': 'gradientShift 3s ease infinite',
+        'bounce-slow': 'bounce 3s infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-20px)' },
+        },
+        glow: {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(0, 102, 255, 0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(0, 212, 255, 0.5)' },
+        },
+        slideUp: {
+          from: { opacity: '0', transform: 'translateY(30px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        pulseGlow: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+        },
+        gradientShift: {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+      },
+      spacing: {
+        128: '32rem',
+        144: '36rem',
+        160: '40rem',
+        176: '44rem',
+        192: '48rem',
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+        '4xl': '2rem',
+      },
+      backdropFilter: {
+        glass: 'blur(10px)',
+      },
+      boxShadow: {
+        glow: '0 0 30px rgba(0, 102, 255, 0.4)',
+        'glow-lg': '0 0 50px rgba(0, 102, 255, 0.6)',
+        'glow-cyan': '0 0 30px rgba(0, 212, 255, 0.3)',
+        glass: '0 8px 32px 0 rgba(31, 38, 57, 0.37)',
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+      },
+    },
+  },
+  plugins: [],
+};

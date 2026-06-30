@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legal — Loading…</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); min-height: 100vh; color: #e2e8f0; }
+    a { text-decoration: none; }
+
+    /* ── Header ── */
+    header { position: sticky; top: 0; z-index: 50; background: rgba(15,23,42,0.85); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .header-inner { max-width: 900px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand img { height: 32px; object-fit: contain; display: none; }
+    .brand-initials { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #06b6d4); display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .brand-name { font-weight: 600; color: #f1f5f9; font-size: 15px; }
+    .back-link { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #94a3b8; transition: color .2s; }
+    .back-link:hover { color: #f1f5f9; }
+    .back-link svg { width: 15px; height: 15px; }
+
+    /* ── Tabs ── */
+    .tab-bar { max-width: 900px; margin: 32px auto 0; padding: 0 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .tab-btn { padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #94a3b8; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .2s; white-space: nowrap; }
+    .tab-btn:hover { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+    .tab-btn.active-blue   { background: rgba(59,130,246,.15); border-color: rgba(59,130,246,.4); color: #60a5fa; }
+    .tab-btn.active-cyan   { background: rgba(6,182,212,.15); border-color: rgba(6,182,212,.4); color: #22d3ee; }
+    .tab-btn.active-amber  { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.4); color: #fbbf24; }
+    .tab-btn.active-green  { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.4); color: #4ade80; }
+
+    /* ── Main content ── */
+    main { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
+    .page-header { margin-bottom: 32px; }
+    .page-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 500; margin-bottom: 14px; }
+    .badge-blue   { background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.25); color: #60a5fa; }
+    .badge-cyan   { background: rgba(6,182,212,.12); border: 1px solid rgba(6,182,212,.25); color: #22d3ee; }
+    .badge-amber  { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25); color: #fbbf24; }
+    .badge-green  { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.25); color: #4ade80; }
+    .badge-icon { width: 14px; height: 14px; }
+    h1.page-title { font-size: 28px; font-weight: 700; color: #f1f5f9; }
+    .page-meta { font-size: 13px; color: #64748b; margin-top: 6px; }
+
+    /* ── Sections ── */
+    .sections { display: flex; flex-direction: column; gap: 28px; }
+    .section h2 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .section p, .section li { font-size: 14px; line-height: 1.7; color: #cbd5e1; }
+    .section p + p { margin-top: 8px; }
+    .section a { color: #60a5fa; }
+    .section a:hover { color: #93c5fd; }
+    h2.blue   { color: #60a5fa; }
+    h2.cyan   { color: #22d3ee; }
+    h2.amber  { color: #fbbf24; }
+    h2.green  { color: #4ade80; }
+    .risk-warning { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 12px; padding: 16px; margin-bottom: 24px; }
+    .risk-warning .wt { font-size: 13px; font-weight: 600; color: #fbbf24; margin-bottom: 4px; }
+    .risk-warning .wb { font-size: 13px; color: rgba(253,230,138,.8); }
+    strong.lit { color: #e2e8f0; }
+
+    /* ── Page sections visibility ── */
+    .legal-page { display: none; }
+    .legal-page.active { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) { h1.page-title { font-size: 22px; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <img id="brand-logo" src="" alt="Logo" />
+      <div class="brand-initials" id="brand-initials">—</div>
+      <span class="brand-name" id="brand-name">Loading…</span>
+    </div>
+    <a class="back-link" id="back-link" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Login
+    </a>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="tab-bar" id="tab-bar">
+  <button class="tab-btn" data-page="terms">Terms of Service</button>
+  <button class="tab-btn" data-page="privacy">Privacy Policy</button>
+  <button class="tab-btn" data-page="risk-disclosure">Risk Disclosure</button>
+  <button class="tab-btn" data-page="compliance">Compliance</button>
+</nav>
+
+<main>
+
+  <!-- ════ TERMS ════ -->
+  <div class="legal-page" id="page-terms">
+    <div class="page-header">
+      <div class="page-badge badge-blue">
+        <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Legal Document
+      </div>
+      <h1 class="page-title">Terms of Service</h1>
+      <p class="page-meta"><span class="cn"></span> · Last updated: <span id="terms-date"></span></p>
+    </div>
+    <div class="sections">
+      <div class="section"><h2 class="blue">1. Acceptance of Terms</h2><p>By accessing and using the <span class="cn"></span> platform ("Service"), you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using or accessing this Service. These terms apply to all visitors, users, and others who access or use the Service.</p></div>
+      <div class="section"><h2 class="blue">2. Eligibility</h2><p>You must be at least 18 years of age and legally competent to enter into binding contracts to use this Service. By using the Service, you represent and warrant that you meet all eligibility requirements. We may, in our sole discretion, refuse to offer the Service to any person or entity and change eligibility criteria at any time.</p></div>
+      <div class="section"><h2 class="blue">3. Account Registration &amp; Security</h2><p>You must provide accurate, complete, and current information during the registration process and keep your account information updated. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify <span class="cn"></span> immediately of any unauthorized use of your account or any other breach of security.</p><p><span class="cn"></span> will not be liable for any loss or damage arising from your failure to comply with this security obligation.</p></div>
+      <div class="section"><h2 class="blue">4. Trading Services &amp; Risks</h2><p>Trading in financial instruments including forex, CFDs, and other derivatives involves substantial risk of loss and is not suitable for all investors. You should carefully consider your investment objectives, level of experience, and risk appetite before engaging in trading activities.</p><p>Past performance of any financial instrument is not indicative of future results. You acknowledge that you may sustain a total loss of the funds in your trading account and, in some cases, additional losses beyond your deposits.</p></div>
+      <div class="section"><h2 class="blue">5. Copy Trading</h2><p>Our copy trading feature allows you to replicate the trades of other traders ("Masters"). You understand that copying a Master trader does not guarantee profits. Past performance of a Master trader is not indicative of future results. You are solely responsible for setting appropriate risk parameters and monitoring your copy trading positions. <span class="cn"></span> does not endorse any Master trader or guarantee the performance of any trading strategy.</p></div>
+      <div class="section"><h2 class="blue">6. Deposits, Withdrawals &amp; Fees</h2><p>All deposits and withdrawals are subject to our verification and KYC/AML compliance procedures. We reserve the right to request supporting documentation before processing any transaction. Processing times vary by payment method. <span class="cn"></span> reserves the right to charge fees for certain services, which will be disclosed prior to the transaction.</p></div>
+      <div class="section"><h2 class="blue">7. KYC &amp; AML Compliance</h2><p>In compliance with anti-money laundering (AML) and Know Your Customer (KYC) regulations, you agree to provide all requested identity verification documents. <span class="cn"></span> reserves the right to suspend or terminate accounts that fail to complete verification or are suspected of engaging in money laundering, terrorist financing, or other illegal activities.</p></div>
+      <div class="section"><h2 class="blue">8. Prohibited Activities</h2><p>You agree not to: engage in any illegal activities, manipulate markets or exploit platform vulnerabilities, use automated systems to abuse the platform, provide false information, share account access with unauthorized parties, engage in abusive trading practices including arbitrage exploitation, or engage in any activity that could damage <span class="cn"></span>'s reputation or operational integrity.</p></div>
+      <div class="section"><h2 class="blue">9. Intellectual Property</h2><p>The Service and its original content, features, and functionality are owned by <span class="cn"></span> and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws. You may not copy, modify, create derivative works, publicly display, or commercially exploit any content from the Service without express written permission.</p></div>
+      <div class="section"><h2 class="blue">10. Limitation of Liability</h2><p><span class="cn"></span> shall not be liable for any direct, indirect, incidental, special, consequential, or exemplary damages, including but not limited to: trading losses, loss of profits, loss of data, system outages, unauthorized account access, or any other damages resulting from your use of the Service. In no event shall <span class="cn"></span>'s total liability exceed the fees paid by you to <span class="cn"></span> in the three months preceding the claim.</p></div>
+      <div class="section"><h2 class="blue">11. Indemnification</h2><p>You agree to defend, indemnify, and hold harmless <span class="cn"></span> and its officers, directors, employees, and agents from and against any claims, damages, obligations, losses, liabilities, costs, and expenses arising from your use of the Service, violation of these Terms, or violation of any rights of a third party.</p></div>
+      <div class="section"><h2 class="blue">12. Termination</h2><p><span class="cn"></span> reserves the right to terminate or suspend your account and access to the Service, without prior notice or liability, for any reason, including if you breach these Terms. Upon termination, your right to use the Service will immediately cease. All provisions of these Terms which by their nature should survive termination shall remain in effect.</p></div>
+      <div class="section"><h2 class="blue">13. Modifications to Terms</h2><p>We reserve the right to modify these Terms at any time. We will provide notice of significant changes by updating the date at the top of this page or by notifying you via email. Your continued use of the Service after such changes constitutes your acceptance of the new Terms.</p></div>
+      <div class="section"><h2 class="blue">14. Governing Law</h2><p>These Terms shall be governed by and construed in accordance with applicable laws. Any disputes arising from these Terms or your use of the Service shall be subject to the exclusive jurisdiction of the competent courts.</p></div>
+      <div class="section"><h2 class="blue">15. Contact Information</h2><p>For questions or concerns about these Terms, please contact us at <a class="email-link" href="#">support@example.com</a>.</p></div>
+    </div>
+  </div>
+
+  <!-- ════ PRIVACY ════ -->
+  <div class="legal-page" id="page-privacy">
+    <div class="page-header">
+      <div class="page-badge badge-cyan">
+        <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Legal Document
+      </div>
+      <h1 class="page-title">Privacy Policy</h1>
+      <p class="page-meta"><span class="cn"></span> · Last updated: <span id="privacy-date"></span></p>
+    </div>
+    <div class="sections">
+      <div class="section"><h2 class="cyan">1. Information We Collect</h2><p><strong class="lit">Personal Information:</strong> Name, email address, phone number, date of birth, nationality, government-issued ID documents, proof of address, and financial information provided during registration and KYC verification.</p><p><strong class="lit">Usage Data:</strong> IP address, browser type, device information, pages visited, time spent on the platform, trading activity, and interaction logs.</p><p><strong class="lit">Financial Data:</strong> Payment details, transaction history, deposit and withdrawal records, and trading account information.</p></div>
+      <div class="section"><h2 class="cyan">2. How We Use Your Information</h2><p>We use the information we collect to: provide, operate, and maintain our services; process transactions and send related information; verify your identity and comply with KYC/AML obligations; send administrative communications, security alerts, and support messages; improve and personalize your experience; analyze usage to improve our platform; comply with legal obligations and enforce our Terms; prevent fraud and detect security incidents; and send promotional communications (with your consent).</p></div>
+      <div class="section"><h2 class="cyan">3. Data Sharing &amp; Disclosure</h2><p><span class="cn"></span> does not sell, trade, or rent your personal information to third parties. We may share your information with: trusted service providers who assist in operating our platform (under strict confidentiality agreements); payment processors for transaction handling; regulatory authorities as required by law; law enforcement when legally compelled; and business successors in the event of a merger or acquisition.</p></div>
+      <div class="section"><h2 class="cyan">4. Data Security</h2><p>We implement industry-standard security measures including SSL/TLS encryption for data transmission, AES-256 encryption for stored data, two-factor authentication options, regular security audits, and access controls limiting data to authorized personnel. However, no method of transmission over the internet is 100% secure, and we cannot guarantee absolute security.</p></div>
+      <div class="section"><h2 class="cyan">5. Data Retention</h2><p>We retain your personal data for as long as your account is active or as needed to provide services. We retain certain information for up to 7 years to comply with financial regulations, tax laws, and anti-money laundering requirements even after account closure. You may request deletion of your data subject to these retention obligations.</p></div>
+      <div class="section"><h2 class="cyan">6. Cookies &amp; Tracking</h2><p>We use cookies and similar tracking technologies to track activity on our platform and store certain information. You can instruct your browser to refuse all cookies or indicate when a cookie is being sent. However, some features of the Service may not function properly without cookies.</p></div>
+      <div class="section"><h2 class="cyan">7. Your Rights</h2><p>Depending on your jurisdiction, you may have the right to: access personal data we hold about you; correct inaccurate or incomplete data; request deletion of your personal data; restrict or object to processing; receive your data in a portable format; and withdraw consent at any time. To exercise these rights, contact us at <a class="email-link email-cyan" href="#">support@example.com</a>.</p></div>
+      <div class="section"><h2 class="cyan">8. Third-Party Links</h2><p>Our platform may contain links to third-party websites. We are not responsible for the privacy practices of those sites and encourage you to review their privacy policies. This Privacy Policy applies only to information collected through our Service.</p></div>
+      <div class="section"><h2 class="cyan">9. Children's Privacy</h2><p>Our Service is not directed to individuals under the age of 18. We do not knowingly collect personal information from minors. If you become aware that a minor has provided us with personal information, please contact us immediately.</p></div>
+      <div class="section"><h2 class="cyan">10. Changes to This Policy</h2><p>We may update this Privacy Policy periodically. We will notify you of significant changes via email or prominent notice on our platform. Continued use of the Service after changes become effective constitutes your acceptance of the updated policy.</p></div>
+      <div class="section"><h2 class="cyan">11. Contact Us</h2><p>For privacy-related questions or to exercise your data rights, contact our Privacy Officer at <a class="email-link email-cyan" href="#">support@example.com</a>.</p></div>
+    </div>
+  </div>
+
+  <!-- ════ RISK ════ -->
+  <div class="legal-page" id="page-risk-disclosure">
+    <div class="page-header">
+      <div class="page-badge badge-amber">
+        <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Legal Document
+      </div>
+      <h1 class="page-title">Risk Disclosure</h1>
+      <p class="page-meta"><span class="cn"></span> · Last updated: <span id="risk-date"></span></p>
+    </div>
+    <div class="sections">
+      <div class="risk-warning"><p class="wt">⚠️ Important Warning</p><p class="wb">Trading in financial instruments carries a high level of risk to your capital and may result in losses that exceed your initial investment. Please ensure you fully understand the risks involved before trading.</p></div>
+      <div class="section"><h2 class="amber">1. General Risk Warning</h2><p>Trading foreign exchange, contracts for difference (CFDs), and other financial derivatives involves significant risk and is not appropriate for all investors. The possibility exists that you could sustain a loss of some or all of your initial investment. Therefore, you should not invest money that you cannot afford to lose.</p></div>
+      <div class="section"><h2 class="amber">2. Market Risk</h2><p>Financial markets are subject to rapid and unpredictable price movements driven by economic data, geopolitical events, market sentiment, and other factors. These movements can result in significant losses in a short period. Past market performance is not a reliable indicator of future performance.</p></div>
+      <div class="section"><h2 class="amber">3. Leverage Risk</h2><p>Leveraged trading amplifies both potential profits and losses. Using leverage means you can lose more than your initial deposit. A small adverse movement in the market can result in a proportionally much larger loss relative to your account balance. You must fully understand how leverage works before trading.</p></div>
+      <div class="section"><h2 class="amber">4. Liquidity Risk</h2><p>In certain market conditions, particularly during periods of high volatility or outside normal trading hours, you may be unable to execute a trade at the price you expect. Spreads may widen significantly and orders may be executed at prices different from those quoted (slippage).</p></div>
+      <div class="section"><h2 class="amber">5. Technology Risk</h2><p>Electronic trading platforms are subject to technical failures, internet connectivity issues, software bugs, and cyber attacks. <span class="cn"></span> cannot guarantee that the platform will be available at all times or that orders will always be executed as intended. You should have contingency plans for trading during platform outages.</p></div>
+      <div class="section"><h2 class="amber">6. Counterparty Risk</h2><p>When trading through <span class="cn"></span>, you are exposed to the risk that <span class="cn"></span> may be unable to fulfill its financial obligations. While we maintain adequate capitalization and risk management procedures, no financial firm is without counterparty risk.</p></div>
+      <div class="section"><h2 class="amber">7. Copy Trading Risks</h2><p>Copying other traders carries additional risks. The performance of a Master trader you copy may deteriorate significantly. You may copy strategies that were developed under different market conditions. The risk management of a Master trader may not be suitable for your financial situation. <span class="cn"></span> does not vet, endorse, or guarantee the performance of any Master trader.</p></div>
+      <div class="section"><h2 class="amber">8. Regulatory Risk</h2><p>Changes in laws and regulations can adversely affect trading conditions, the availability of certain financial instruments, or your ability to access your funds. You should stay informed about regulatory changes in your jurisdiction that may affect your trading activities.</p></div>
+      <div class="section"><h2 class="amber">9. Currency Risk</h2><p>If your account base currency differs from the currency of the instruments you trade or your local currency, exchange rate movements can adversely affect your profits or losses when converted back to your base currency.</p></div>
+      <div class="section"><h2 class="amber">10. Acknowledgement</h2><p>By using <span class="cn"></span>'s services, you acknowledge that you have read, understood, and accepted all risks described in this disclosure. You confirm that you are aware of the risks involved in trading financial instruments and that you are financially and emotionally capable of sustaining any losses.</p></div>
+    </div>
+  </div>
+
+  <!-- ════ COMPLIANCE ════ -->
+  <div class="legal-page" id="page-compliance">
+    <div class="page-header">
+      <div class="page-badge badge-green">
+        <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Legal Document
+      </div>
+      <h1 class="page-title">Compliance Policy</h1>
+      <p class="page-meta"><span class="cn"></span> · Last updated: <span id="compliance-date"></span></p>
+    </div>
+    <div class="sections">
+      <div class="section"><h2 class="green">1. Regulatory Compliance</h2><p><span class="cn"></span> is committed to operating in full compliance with all applicable financial regulations, anti-money laundering laws, and international financial standards. We maintain robust compliance programs designed to prevent financial crime and protect our clients and the integrity of the financial system.</p></div>
+      <div class="section"><h2 class="green">2. Know Your Customer (KYC)</h2><p><span class="cn"></span> maintains a rigorous KYC program. All clients are required to verify their identity before accessing full platform functionality. Required documents may include a government-issued photo ID (passport, national ID, or driver's license), proof of residence (utility bill or bank statement dated within 3 months), and for enhanced due diligence: proof of source of funds.</p><p>We reserve the right to request additional documentation at any time and to restrict or suspend accounts that fail to provide requested verification materials.</p></div>
+      <div class="section"><h2 class="green">3. Anti-Money Laundering (AML)</h2><p>We have implemented comprehensive AML procedures including: ongoing monitoring of client transactions for suspicious activity; reporting of suspicious transactions to relevant authorities as required by law; training of all relevant staff on AML obligations; risk-based customer due diligence; and regular review and updating of our AML policies.</p><p><span class="cn"></span> does not accept cash deposits or payments from third parties. All deposits must originate from accounts held in the client's own name.</p></div>
+      <div class="section"><h2 class="green">4. Counter-Terrorist Financing (CTF)</h2><p><span class="cn"></span> maintains policies to prevent the use of our services for terrorist financing. We screen clients against international sanctions lists and politically exposed persons (PEP) databases. Accounts identified as having links to terrorist organizations or sanctioned entities will be immediately suspended and reported to the relevant authorities.</p></div>
+      <div class="section"><h2 class="green">5. Sanctions Compliance</h2><p><span class="cn"></span> complies with all applicable international sanctions programs. We do not provide services to individuals or entities in countries subject to international sanctions or on restricted persons lists. Clients must not use our services to facilitate any transaction that would violate applicable sanctions laws.</p></div>
+      <div class="section"><h2 class="green">6. Data Protection Compliance</h2><p>We comply with applicable data protection laws including GDPR where applicable. We process personal data lawfully, fairly, and transparently. Personal data is collected for specified, explicit, and legitimate purposes and is not further processed in a manner incompatible with those purposes. We implement appropriate technical and organizational measures to ensure data security.</p></div>
+      <div class="section"><h2 class="green">7. Responsible Trading</h2><p><span class="cn"></span> is committed to responsible trading practices. We provide risk warnings, educational resources, and risk management tools to help clients make informed trading decisions. We reserve the right to apply trading restrictions, reduce leverage, or contact clients we believe may be exhibiting signs of problematic trading behavior.</p></div>
+      <div class="section"><h2 class="green">8. Client Fund Protection</h2><p>Client funds are held in segregated accounts separate from <span class="cn"></span>'s own operational funds. This ensures that client funds cannot be used for company operational expenses and are protected in the event of insolvency. We conduct regular reconciliations to verify the accuracy of client fund records.</p></div>
+      <div class="section"><h2 class="green">9. Complaints Handling</h2><p>We maintain a fair and transparent complaints handling procedure. Complaints should be submitted in writing to <a class="email-link email-green" href="#">support@example.com</a>. We will acknowledge your complaint within 24 hours and aim to resolve all complaints within 10 business days. If you are dissatisfied with our response, you may escalate to the relevant regulatory authority.</p></div>
+      <div class="section"><h2 class="green">10. Reporting Concerns</h2><p>If you become aware of any potential compliance violations, suspicious activities, or financial crimes involving <span class="cn"></span>'s platform, please report them immediately to our compliance team at <a class="email-link email-green" href="#">support@example.com</a>. All reports are treated confidentially.</p></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  /* ── Config (same auto-detect pattern as landing) ── */
+  var host = location.hostname;
+  var API_BASE = (function () {
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:5000/api';
+    var domain = host.replace(/^www\./, '');
+    return location.protocol + '//api.' + domain + '/api';
+  })();
+  var PORTAL_URL = (function () {
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3001';
+    var domain = host.replace(/^www\./, '');
+    return location.protocol + '//user.' + domain;
+  })();
+
+  /* ── Page routing ── */
+  var PAGE_META = {
+    terms:            { color: 'blue' },
+    privacy:          { color: 'cyan' },
+    'risk-disclosure':{ color: 'amber' },
+    compliance:       { color: 'green' },
+  };
+
+  function getPage() {
+    var p = new URLSearchParams(location.search).get('page') || 'terms';
+    return PAGE_META[p] ? p : 'terms';
+  }
+
+  var currentPage = getPage();
+
+  function showPage(page) {
+    currentPage = page;
+    document.querySelectorAll('.legal-page').forEach(function (el) { el.classList.remove('active'); });
+    var el = document.getElementById('page-' + page);
+    if (el) el.classList.add('active');
+
+    var meta = PAGE_META[page];
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.classList.remove('active-blue', 'active-cyan', 'active-amber', 'active-green');
+      if (btn.dataset.page === page) btn.classList.add('active-' + meta.color);
+    });
+
+    // Update URL without reload
+    var url = new URL(location.href);
+    url.searchParams.set('page', page);
+    history.replaceState(null, '', url.toString());
+
+    document.title = {
+      terms: 'Terms of Service',
+      privacy: 'Privacy Policy',
+      'risk-disclosure': 'Risk Disclosure',
+      compliance: 'Compliance Policy',
+    }[page] || 'Legal';
+  }
+
+  /* ── Tab clicks ── */
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { showPage(btn.dataset.page); });
+  });
+
+  /* ── Date stamp ── */
+  var dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  ['terms-date', 'privacy-date', 'risk-date', 'compliance-date'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = dateStr;
+  });
+
+  /* ── Branding ── */
+  function applyBranding(name, logoUrl, email) {
+    var cnEls = document.querySelectorAll('.cn');
+    cnEls.forEach(function (el) { el.textContent = name; });
+    document.getElementById('brand-name').textContent = name;
+    document.title = currentPage; // will be overwritten by showPage but set title for tab
+
+    // Logo: show img if available, hide initials box; else show initials
+    var logoImg = document.getElementById('brand-logo');
+    var initialsEl = document.getElementById('brand-initials');
+    if (logoUrl) {
+      // Build absolute URL (same logic as getKycDocUrl)
+      var absUrl = logoUrl.startsWith('http') ? logoUrl
+        : API_BASE.replace(/\/api\/?$/, '') + '/' + logoUrl.replace(/^\//, '');
+      logoImg.src = absUrl;
+      logoImg.style.display = 'block';
+      initialsEl.style.display = 'none';
+    } else {
+      initialsEl.textContent = name.substring(0, 2).toUpperCase();
+      initialsEl.style.display = 'flex';
+      logoImg.style.display = 'none';
+    }
+
+    // Email links
+    if (email) {
+      document.querySelectorAll('.email-link').forEach(function (a) {
+        a.href = 'mailto:' + email;
+        a.textContent = email;
+      });
+    }
+  }
+
+  /* ── Fetch company settings ── */
+  document.getElementById('back-link').href = PORTAL_URL + '/login';
+
+  fetch(API_BASE + '/public/settings/company')
+    .then(function (r) { return r.json(); })
+    .then(function (json) {
+      var d = json.data || json;
+      var name = d.companyName || d.name || 'Trading Platform';
+      var logoUrl = d.logoUrl || d.logo || '';
+      var email = d.email || d.supportEmail || 'support@' + host;
+      if (d.portalUrl) document.getElementById('back-link').href = d.portalUrl.replace(/\/$/, '') + '/login';
+      applyBranding(name, logoUrl, email);
+    })
+    .catch(function () {
+      var fallback = host.replace(/^www\./, '').replace(/^app\./, '');
+      applyBranding(fallback || 'Trading Platform', '', '');
+    });
+
+  /* ── Init ── */
+  showPage(currentPage);
+</script>
+</body>
+</html>

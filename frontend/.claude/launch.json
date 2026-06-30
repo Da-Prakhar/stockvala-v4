@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["/Users/prakhar/Downloads/StockVala OG Platform/stockvala-v2/frontend/start-dev.sh"],
+      "port": 3001
+    }
+  ]
+}

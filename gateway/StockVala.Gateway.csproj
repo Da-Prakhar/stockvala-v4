@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Use MSBuildBinPath so bare .NET Framework MSBuild (no VS Build Tools) works -->
+  <Import Project="$(MSBuildBinPath)\Microsoft.Common.props" Condition="Exists('$(MSBuildBinPath)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>StockVala.Gateway</RootNamespace>
+    <AssemblyName>StockVala.Gateway</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetNamePostfix>64</TargetNamePostfix>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\Release\</OutputPath>
+    <PlatformTarget>x64</PlatformTarget>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <OutputPath>bin\Debug\</OutputPath>
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- MT5 SDK DLLs - copy from SDK Libs/ folder next to this .csproj -->
+    <Reference Include="MetaQuotes.MT5CommonAPI">
+      <HintPath>Libs\MetaQuotes.MT5CommonAPI64.dll</HintPath>
+    </Reference>
+    <Reference Include="MetaQuotes.MT5ManagerAPI">
+      <HintPath>Libs\MetaQuotes.MT5ManagerAPI64.dll</HintPath>
+    </Reference>
+    <!-- Redis client + all dependencies — bundled in Libs/ (no NuGet needed on Windows) -->
+    <Reference Include="StackExchange.Redis">
+      <HintPath>Libs\StackExchange.Redis.dll</HintPath>
+    </Reference>
+    <Reference Include="Pipelines.Sockets.Unofficial">
+      <HintPath>Libs\Pipelines.Sockets.Unofficial.dll</HintPath>
+    </Reference>
+    <Reference Include="System.IO.Pipelines">
+      <HintPath>Libs\System.IO.Pipelines.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Channels">
+      <HintPath>Libs\System.Threading.Channels.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>Libs\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>Libs\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>Libs\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>Libs\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions">
+      <HintPath>Libs\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
+    <!-- Required by StackExchange.Redis on bare .NET Framework 4.x -->
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces">
+      <HintPath>Libs\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Configuration" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="src\Program.cs" />
+    <Compile Include="src\GatewayApp.cs" />
+    <Compile Include="src\PriceFeed.cs" />
+    <Compile Include="src\TradeRouter.cs" />
+    <Compile Include="src\RedisClient.cs" />
+    <Compile Include="src\Config.cs" />
+    <Compile Include="src\PositionSync.cs" />
+    <Compile Include="src\TickAggregator.cs" />
+    <Compile Include="src\SymbolPoller.cs" />
+    <Compile Include="src\HttpServer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+    <!-- Native unmanaged DLL — must be next to the exe at runtime -->
+    <Content Include="Libs\MT5APIManager64.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- After every build: replace the v4 Unsafe DLL MSBuild copied with the v6 build
+       that StackExchange.Redis requires.  The source lives in Libs\Unsafe6\ which is
+       committed to the repo so no NuGet restore or manual download is needed. -->
+  <Target Name="OverwriteUnsafeDll" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)Libs\Unsafe6\System.Runtime.CompilerServices.Unsafe.dll"
+          DestinationFiles="$(OutDir)System.Runtime.CompilerServices.Unsafe.dll"
+          OverwriteReadOnlyFiles="true" />
+    <Message Text="[PostBuild] Unsafe DLL upgraded to v6 in $(OutDir)" Importance="high" />
+  </Target>
+</Project>

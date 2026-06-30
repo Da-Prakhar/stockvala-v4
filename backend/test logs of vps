@@ -1,0 +1,670 @@
+0	09:12:49.162		
+0	09:12:49.162	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	09:12:49.162	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	09:12:49.193	Network	'28003': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:12:49.619	Network	'28003': authorized on StarwaveFX-Server
+0	09:12:49.619	StarwaveFX-Server	'28003': bases are initializing...
+0	09:12:49.619	Accounts	synchronization started
+0	09:12:49.619	Orders	synchronization started
+0	09:12:49.619	Positions	synchronization started
+0	09:12:50.126	Accounts	synchronization - 12 records received
+0	09:12:50.126	Orders	synchronization - 0 records received
+0	09:12:50.126	Positions	synchronization - 0 records received
+0	09:12:50.127	Accounts	12 of 12 records synchronized
+0	09:12:50.127	Accounts	saving to disk
+0	09:12:50.134	Orders	0 of 0 records synchronized
+0	09:12:50.135	Positions	0 of 0 records synchronized
+0	09:12:50.144	Accounts	12 records saved
+0	09:12:50.144	Network	'28003': manager synchronized: 12 users, 0 orders, 0 positions, 6 groups, 507 symbols, 0 spreads, 0 subscriptions
+0	09:12:50.145	Network	'28003': server's trading time differs from the local one by 02:00 hour(s)
+0	09:12:50.186	TradeCenter	6 groups initialized in 47 ms
+0	09:12:50.190	IMTManagerSink	subscribed on IMTManagerSink
+0	09:12:50.195	IMTTickSink	subscribed on IMTTickSink
+0	09:12:50.197	IMTPositionSink	subscribed on IMTPositionSink
+0	09:12:50.198	IMTRequestSink	subscribed on IMTRequestSink
+0	09:12:50.358	Dealer	'28003': dealer has been started
+0	09:12:51.189	Network	'28003': scanning network
+0	09:12:51.942	StarwaveFX-Server	'28003': access point 'Access Server' (84.201.6.142:443) is available (ping 124 msec)
+0	09:12:52.802	StarwaveFX-Server	'28003': access point 'Access Server' (185.82.73.106:443) is available (ping 178 msec)
+0	09:12:52.802	Network	'28003': scanning network finished
+0	09:13:16.333	Dealer	'28003': dealer has been stopped
+0	09:13:16.333	IMTRequestSink	unsubscribed from IMTRequestSink
+0	09:13:16.333	IMTTickSink	unsubscribed from IMTTickSink
+0	09:13:16.333	IMTPositionSink	unsubscribed from IMTPositionSink
+0	09:13:16.333	IMTManagerSink	unsubscribed from IMTManagerSink
+0	09:13:16.333	Network	'28003': disconnected from StarwaveFX-Server
+2	09:13:16.333	Dealer	'28003': dealer stopping failed (4)
+0	09:13:16.377	Accounts	saving to disk
+0	09:13:16.377	Accounts	12 records saved
+0	09:13:16.896	Exit	MetaTrader 5 Manager API stopped
+0	09:20:16.243		
+0	09:20:16.243	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	09:20:16.243	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	09:20:16.271	Network	'28003': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:20:16.684	Network	'28003': authorized on StarwaveFX-Server
+0	09:20:16.684	StarwaveFX-Server	'28003': bases are initializing...
+0	09:20:16.699	Accounts	12 records loaded in 15 ms
+0	09:20:16.699	Accounts	synchronization started
+0	09:20:16.699	Orders	synchronization started
+0	09:20:16.699	Positions	synchronization started
+0	09:20:16.833	Accounts	synchronization - 0 records received
+0	09:20:16.833	Orders	synchronization - 0 records received
+0	09:20:16.833	Positions	synchronization - 0 records received
+0	09:20:16.833	Accounts	0 of 12 records synchronized
+0	09:20:16.833	Accounts	saving to disk
+0	09:20:16.843	Orders	0 of 0 records synchronized
+0	09:20:16.843	Positions	0 of 0 records synchronized
+0	09:20:16.843	Accounts	12 records saved
+0	09:20:16.843	Network	'28003': manager synchronized: 12 users, 0 orders, 0 positions, 6 groups, 507 symbols, 0 spreads, 0 subscriptions
+0	09:20:16.843	Network	'28003': server's trading time differs from the local one by 02:00 hour(s)
+0	09:20:16.865	TradeCenter	6 groups initialized in 16 ms
+0	09:20:16.865	IMTManagerSink	subscribed on IMTManagerSink
+0	09:20:16.865	IMTTickSink	subscribed on IMTTickSink
+0	09:20:16.865	IMTPositionSink	subscribed on IMTPositionSink
+0	09:20:16.865	IMTRequestSink	subscribed on IMTRequestSink
+0	09:20:17.003	Dealer	'28003': dealer has been started
+0	09:20:18.293	Network	'28003': scanning network
+0	09:20:19.105	StarwaveFX-Server	'28003': access point 'Access Server' (84.201.6.142:443) is available (ping 132 msec)
+0	09:20:20.359	StarwaveFX-Server	'28003': access point 'Access Server' (185.82.73.106:443) is available (ping 256 msec)
+0	09:20:20.359	Network	'28003': scanning network finished
+0	09:38:47.069		
+0	09:38:47.069	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	09:38:47.069	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	09:38:47.085	Network	'28003': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:38:47.552	Network	'28003': authorized on StarwaveFX-Server
+0	09:38:47.580	StarwaveFX-Server	'28003': bases are initializing...
+0	09:38:47.583	Accounts	12 records loaded in 0 ms
+0	09:38:47.583	Accounts	synchronization started
+0	09:38:47.583	Orders	synchronization started
+0	09:38:47.583	Positions	synchronization started
+0	09:38:47.737	Accounts	synchronization - 0 records received
+0	09:38:47.737	Orders	synchronization - 0 records received
+0	09:38:47.737	Positions	synchronization - 0 records received
+0	09:38:47.737	Accounts	0 of 12 records synchronized
+0	09:38:47.737	Accounts	saving to disk
+0	09:38:47.737	Orders	0 of 0 records synchronized
+0	09:38:47.737	Positions	0 of 0 records synchronized
+0	09:38:47.737	Accounts	12 records saved
+0	09:38:47.737	Network	'28003': manager synchronized: 12 users, 0 orders, 0 positions, 6 groups, 507 symbols, 0 spreads, 0 subscriptions
+0	09:38:47.737	Network	'28003': server's trading time differs from the local one by 02:00 hour(s)
+0	09:38:47.752	TradeCenter	6 groups initialized in 15 ms
+0	09:38:47.752	IMTManagerSink	subscribed on IMTManagerSink
+0	09:38:47.752	IMTTickSink	subscribed on IMTTickSink
+0	09:38:47.752	IMTPositionSink	subscribed on IMTPositionSink
+0	09:38:47.752	IMTRequestSink	subscribed on IMTRequestSink
+0	09:38:47.917	Dealer	'28003': dealer has been started
+0	09:38:49.105	Network	'28003': scanning network
+0	09:38:49.936	StarwaveFX-Server	'28003': access point 'Access Server' (84.201.6.142:443) is available (ping 136 msec)
+0	09:38:50.812	StarwaveFX-Server	'28003': access point 'Access Server' (185.82.73.106:443) is available (ping 183 msec)
+0	09:38:50.812	Network	'28003': scanning network finished
+0	09:45:42.898	Dealer	'28003': dealer has been stopped
+0	09:45:42.898	IMTRequestSink	unsubscribed from IMTRequestSink
+0	09:45:42.898	IMTTickSink	unsubscribed from IMTTickSink
+0	09:45:42.898	IMTPositionSink	unsubscribed from IMTPositionSink
+0	09:45:42.898	IMTManagerSink	unsubscribed from IMTManagerSink
+0	09:45:42.898	Dealer	'28003': dealer has been stopped
+0	09:45:42.898	Network	'28003': disconnected from StarwaveFX-Server
+0	09:45:42.978	Accounts	saving to disk
+0	09:45:42.978	Accounts	12 records saved
+0	09:45:43.501	Exit	MetaTrader 5 Manager API stopped
+0	09:45:51.708		
+0	09:45:51.708	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	09:45:51.708	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	09:45:51.724	Network	'28003': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:45:52.161	Network	'28003': authorized on StarwaveFX-Server
+0	09:45:52.161	StarwaveFX-Server	'28003': bases are initializing...
+0	09:45:52.161	Accounts	12 records loaded in 0 ms
+0	09:45:52.161	Accounts	synchronization started
+0	09:45:52.161	Orders	synchronization started
+0	09:45:52.161	Positions	synchronization started
+0	09:45:52.302	Accounts	synchronization - 0 records received
+0	09:45:52.302	Orders	synchronization - 0 records received
+0	09:45:52.302	Positions	synchronization - 0 records received
+0	09:45:52.302	Accounts	0 of 12 records synchronized
+0	09:45:52.318	Accounts	saving to disk
+0	09:45:52.318	Orders	0 of 0 records synchronized
+0	09:45:52.318	Positions	0 of 0 records synchronized
+0	09:45:52.318	Accounts	12 records saved
+0	09:45:52.333	Network	'28003': manager synchronized: 12 users, 0 orders, 0 positions, 6 groups, 507 symbols, 0 spreads, 0 subscriptions
+0	09:45:52.333	Network	'28003': server's trading time differs from the local one by 02:00 hour(s)
+0	09:45:52.349	TradeCenter	6 groups initialized in 16 ms
+0	09:45:52.349	IMTManagerSink	subscribed on IMTManagerSink
+0	09:45:52.349	IMTTickSink	subscribed on IMTTickSink
+0	09:45:52.349	IMTPositionSink	subscribed on IMTPositionSink
+0	09:45:52.349	IMTRequestSink	subscribed on IMTRequestSink
+0	09:45:52.489	Dealer	'28003': dealer has been started
+0	09:45:53.760	Network	'28003': scanning network
+0	09:45:54.556	StarwaveFX-Server	'28003': access point 'Access Server' (84.201.6.142:443) is available (ping 129 msec)
+0	09:45:55.396	StarwaveFX-Server	'28003': access point 'Access Server' (185.82.73.106:443) is available (ping 176 msec)
+0	09:45:55.400	Network	'28003': scanning network finished
+0	09:46:29.927	Dealer	'28003': dealer has been stopped
+0	09:46:29.927	IMTRequestSink	unsubscribed from IMTRequestSink
+0	09:46:29.927	IMTTickSink	unsubscribed from IMTTickSink
+0	09:46:29.927	IMTPositionSink	unsubscribed from IMTPositionSink
+0	09:46:29.927	IMTManagerSink	unsubscribed from IMTManagerSink
+0	09:46:29.927	Network	'28003': disconnected from StarwaveFX-Server
+2	09:46:29.927	Dealer	'28003': dealer stopping failed (4)
+0	09:46:29.969	Accounts	saving to disk
+0	09:46:29.969	Accounts	12 records saved
+0	09:46:30.490	Exit	MetaTrader 5 Manager API stopped
+0	09:46:40.975		
+0	09:46:40.975	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	09:46:40.975	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	09:46:40.990	Network	'28003': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:46:41.383	Network	'28003': authorized on StarwaveFX-Server
+0	09:46:41.383	StarwaveFX-Server	'28003': bases are initializing...
+0	09:46:41.399	Accounts	12 records loaded in 16 ms
+0	09:46:41.399	Accounts	synchronization started
+0	09:46:41.399	Orders	synchronization started
+0	09:46:41.399	Positions	synchronization started
+0	09:46:41.521	Accounts	synchronization - 0 records received
+0	09:46:41.521	Orders	synchronization - 0 records received
+0	09:46:41.521	Positions	synchronization - 0 records received
+0	09:46:41.527	Accounts	0 of 12 records synchronized
+0	09:46:41.527	Accounts	saving to disk
+0	09:46:41.527	Orders	0 of 0 records synchronized
+0	09:46:41.527	Positions	0 of 0 records synchronized
+0	09:46:41.527	Accounts	12 records saved
+0	09:46:41.527	Network	'28003': manager synchronized: 12 users, 0 orders, 0 positions, 6 groups, 507 symbols, 0 spreads, 0 subscriptions
+0	09:46:41.527	Network	'28003': server's trading time differs from the local one by 02:00 hour(s)
+0	09:46:41.559	TradeCenter	6 groups initialized in 32 ms
+0	09:46:41.559	IMTManagerSink	subscribed on IMTManagerSink
+0	09:46:41.559	IMTTickSink	subscribed on IMTTickSink
+0	09:46:41.559	IMTPositionSink	subscribed on IMTPositionSink
+0	09:46:41.559	IMTRequestSink	subscribed on IMTRequestSink
+0	09:46:41.686	Dealer	'28003': dealer has been started
+0	09:46:43.035	Network	'28003': scanning network
+0	09:46:43.838	StarwaveFX-Server	'28003': access point 'Access Server' (84.201.6.142:443) is available (ping 135 msec)
+0	09:46:44.755	StarwaveFX-Server	'28003': access point 'Access Server' (185.82.73.106:443) is available (ping 188 msec)
+0	09:46:44.755	Network	'28003': scanning network finished
+0	09:48:44.402	Dealer	'28003': dealer has been stopped
+0	09:48:44.402	IMTRequestSink	unsubscribed from IMTRequestSink
+0	09:48:44.402	IMTTickSink	unsubscribed from IMTTickSink
+0	09:48:44.402	IMTPositionSink	unsubscribed from IMTPositionSink
+0	09:48:44.402	IMTManagerSink	unsubscribed from IMTManagerSink
+0	09:48:44.402	Network	'28003': disconnected from StarwaveFX-Server
+2	09:48:44.402	Dealer	'28003': dealer stopping failed (4)
+0	09:48:44.451	Accounts	saving to disk
+0	09:48:44.472	Accounts	12 records saved
+0	09:48:44.998	Exit	MetaTrader 5 Manager API stopped
+0	09:48:55.821		
+0	09:48:55.821	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	09:48:55.821	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	09:48:55.837	Network	'22300': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:48:56.240	Network	'22300': authorized on StarwaveFX-Server
+0	09:48:56.240	StarwaveFX-Server	'22300': bases are initializing...
+0	09:48:56.240	Accounts	synchronization started
+0	09:48:56.240	Orders	synchronization started
+0	09:48:56.240	Positions	synchronization started
+0	09:48:57.583	Accounts	synchronization - 58 records received
+0	09:48:57.583	Orders	synchronization - 0 records received
+0	09:48:57.588	Positions	synchronization - 182 records received
+0	09:48:57.588	Accounts	58 of 58 records synchronized
+0	09:48:57.588	Accounts	saving to disk
+0	09:48:57.588	Orders	0 of 0 records synchronized
+0	09:48:57.588	Positions	182 of 182 records synchronized
+0	09:48:57.588	Positions	saving to disk
+0	09:48:57.588	Positions	182 records saved
+0	09:48:57.604	Accounts	58 records saved
+0	09:48:57.604	Network	'22300': manager synchronized: 58 users, 0 orders, 182 positions, 3 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	09:48:57.604	Network	'22300': server's trading time differs from the local one by 02:00 hour(s)
+0	09:48:57.620	TradeCenter	3 groups initialized in 15 ms
+0	09:48:57.620	IMTManagerSink	subscribed on IMTManagerSink
+0	09:48:57.620	IMTTickSink	subscribed on IMTTickSink
+0	09:48:57.620	IMTPositionSink	subscribed on IMTPositionSink
+0	09:48:57.620	IMTRequestSink	subscribed on IMTRequestSink
+0	09:48:57.780	Dealer	'22300': dealer has been started
+0	09:48:57.908	Network	'22300': scanning network
+0	09:48:58.677	StarwaveFX-Server	'22300': access point 'Access Server' (84.201.6.142:443) is available (ping 128 msec)
+0	09:48:59.598	StarwaveFX-Server	'22300': access point 'Access Server' (185.82.73.106:443) is available (ping 192 msec)
+0	09:48:59.598	Network	'22300': scanning network finished
+1	09:52:35.209	Network	'22300': connection to StarwaveFX-Server lost
+2	09:52:35.209	Dealer	'22300': dealer stopping failed (7)
+0	09:52:35.209	IMTRequestSink	unsubscribed from IMTRequestSink
+0	09:52:35.209	IMTTickSink	unsubscribed from IMTTickSink
+0	09:52:35.224	IMTPositionSink	unsubscribed from IMTPositionSink
+0	09:52:35.224	IMTManagerSink	unsubscribed from IMTManagerSink
+0	09:52:38.234	Network	'22300': disconnected from StarwaveFX-Server
+0	09:52:38.298	Accounts	saving to disk
+0	09:52:38.314	Accounts	58 records saved
+0	09:52:38.334	Network	'22300': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	09:52:45.834	Network	'22300': authorized on StarwaveFX-Server
+0	09:52:45.834	StarwaveFX-Server	'22300': bases are initializing...
+0	09:52:45.834	Accounts	58 records loaded in 0 ms
+0	09:52:45.834	Accounts	synchronization started
+0	09:52:45.834	Orders	synchronization started
+0	09:52:45.834	Positions	synchronization started
+0	09:52:47.277	Accounts	synchronization - 0 records received
+0	09:52:47.277	Orders	synchronization - 0 records received
+0	09:52:47.277	Positions	synchronization - 0 records received
+0	09:52:47.278	Accounts	0 of 58 records synchronized
+0	09:52:47.278	Accounts	saving to disk
+0	09:52:47.282	Orders	0 of 0 records synchronized
+0	09:52:47.284	Positions	0 of 182 records synchronized
+0	09:52:47.284	Positions	saving to disk
+0	09:52:47.286	Accounts	58 records saved
+0	09:52:47.298	Positions	182 records saved
+0	09:52:47.298	Network	'22300': manager synchronized: 58 users, 0 orders, 182 positions, 3 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	09:52:47.298	Network	'22300': server's trading time differs from the local one by 02:00 hour(s)
+0	09:52:47.309	TradeCenter	3 groups initialized in 16 ms
+0	09:52:47.310	IMTManagerSink	subscribed on IMTManagerSink
+0	09:52:47.310	IMTTickSink	subscribed on IMTTickSink
+0	09:52:47.311	IMTPositionSink	subscribed on IMTPositionSink
+0	09:52:47.311	IMTRequestSink	subscribed on IMTRequestSink
+0	09:52:47.449	Dealer	'22300': dealer has been started
+0	09:52:47.805	Network	'22300': scanning network
+0	09:52:48.568	StarwaveFX-Server	'22300': access point 'Access Server' (84.201.6.142:443) is available (ping 126 msec)
+0	09:52:49.416	StarwaveFX-Server	'22300': access point 'Access Server' (185.82.73.106:443) is available (ping 176 msec)
+0	09:52:49.416	Network	'22300': scanning network finished
+0	10:06:49.004	Dealer	'22300': dealer has been stopped
+0	10:06:49.004	IMTRequestSink	unsubscribed from IMTRequestSink
+0	10:06:49.004	IMTTickSink	unsubscribed from IMTTickSink
+0	10:06:49.004	IMTPositionSink	unsubscribed from IMTPositionSink
+0	10:06:49.004	IMTManagerSink	unsubscribed from IMTManagerSink
+0	10:06:49.021	Dealer	'22300': dealer has been stopped
+0	10:06:49.021	Network	'22300': disconnected from StarwaveFX-Server
+0	10:06:49.083	Accounts	saving to disk
+0	10:06:49.099	Accounts	58 records saved
+0	10:06:49.131	Positions	saving to disk
+0	10:06:49.131	Positions	182 records saved
+0	10:06:49.646	Exit	MetaTrader 5 Manager API stopped
+0	10:07:31.745		
+0	10:07:31.745	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	10:07:31.745	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	10:07:31.771	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	10:07:32.208	Network	'28101': authorized on StarwaveFX-Server
+0	10:07:32.208	StarwaveFX-Server	'28101': bases are initializing...
+0	10:07:32.208	Accounts	synchronization started
+0	10:07:32.208	Orders	synchronization started
+0	10:07:32.208	Positions	synchronization started
+0	10:07:33.677	Accounts	synchronization - 1 records received
+0	10:07:33.677	Orders	synchronization - 0 records received
+0	10:07:33.677	Positions	synchronization - 0 records received
+0	10:07:33.677	Accounts	1 of 1 records synchronized
+0	10:07:33.677	Accounts	saving to disk
+0	10:07:33.687	Orders	0 of 0 records synchronized
+0	10:07:33.687	Accounts	1 records saved
+0	10:07:33.687	Positions	0 of 0 records synchronized
+0	10:07:33.687	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	10:07:33.687	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	10:07:33.702	TradeCenter	1 groups initialized in 15 ms
+0	10:07:33.702	IMTManagerSink	subscribed on IMTManagerSink
+0	10:07:33.709	IMTTickSink	subscribed on IMTTickSink
+0	10:07:33.709	IMTPositionSink	subscribed on IMTPositionSink
+0	10:07:33.709	IMTRequestSink	subscribed on IMTRequestSink
+0	10:07:33.815	Network	'28101': scanning network
+0	10:07:33.847	Dealer	'28101': dealer has been started
+0	10:07:34.615	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 129 msec)
+0	10:07:35.490	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 182 msec)
+0	10:07:35.506	Network	'28101': scanning network finished
+1	10:53:25.991	Network	'28101': connection to StarwaveFX-Server lost
+2	10:53:25.991	Dealer	'28101': dealer stopping failed (7)
+0	10:53:25.991	IMTRequestSink	unsubscribed from IMTRequestSink
+0	10:53:25.991	IMTTickSink	unsubscribed from IMTTickSink
+0	10:53:25.991	IMTPositionSink	unsubscribed from IMTPositionSink
+0	10:53:25.991	IMTManagerSink	unsubscribed from IMTManagerSink
+0	10:53:26.533	Network	'28101': authorized on StarwaveFX-Server through Access Server
+0	10:53:26.548	StarwaveFX-Server	'28101': bases are initializing...
+0	10:53:26.548	Accounts	synchronization started
+0	10:53:26.548	Orders	synchronization started
+0	10:53:26.548	Positions	synchronization started
+0	10:53:26.678	Accounts	synchronization - 0 records received
+0	10:53:26.678	Orders	synchronization - 0 records received
+0	10:53:26.678	Positions	synchronization - 0 records received
+0	10:53:26.678	Accounts	0 of 1 records synchronized
+0	10:53:26.678	Accounts	saving to disk
+0	10:53:26.678	Orders	0 of 0 records synchronized
+0	10:53:26.678	Positions	0 of 0 records synchronized
+0	10:53:26.692	Accounts	1 records saved
+0	10:53:26.692	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	10:53:26.692	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	10:53:26.692	TradeCenter	1 groups initialized in 0 ms
+0	10:53:29.021	Network	'28101': disconnected from StarwaveFX-Server
+0	10:53:29.037	Accounts	saving to disk
+0	10:53:29.068	Accounts	1 records saved
+0	10:53:29.068	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	10:53:29.490	Network	'28101': authorized on StarwaveFX-Server
+0	10:53:29.490	StarwaveFX-Server	'28101': bases are initializing...
+0	10:53:29.506	Accounts	1 records loaded in 15 ms
+0	10:53:29.506	Accounts	synchronization started
+0	10:53:29.506	Orders	synchronization started
+0	10:53:29.506	Positions	synchronization started
+0	10:53:29.631	Accounts	synchronization - 0 records received
+0	10:53:29.631	Orders	synchronization - 0 records received
+0	10:53:29.631	Positions	synchronization - 0 records received
+0	10:53:29.631	Accounts	0 of 1 records synchronized
+0	10:53:29.631	Accounts	saving to disk
+0	10:53:29.648	Orders	0 of 0 records synchronized
+0	10:53:29.648	Positions	0 of 0 records synchronized
+0	10:53:29.648	Accounts	1 records saved
+0	10:53:29.648	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	10:53:29.648	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	10:53:29.648	TradeCenter	1 groups initialized in 0 ms
+0	10:53:29.648	IMTManagerSink	subscribed on IMTManagerSink
+0	10:53:29.648	IMTTickSink	subscribed on IMTTickSink
+0	10:53:29.648	IMTPositionSink	subscribed on IMTPositionSink
+0	10:53:29.648	IMTRequestSink	subscribed on IMTRequestSink
+0	10:53:29.774	Dealer	'28101': dealer has been started
+0	10:53:30.749	Network	'28101': scanning network
+0	10:53:31.577	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 136 msec)
+0	10:53:32.459	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 186 msec)
+0	10:53:32.468	Network	'28101': scanning network finished
+0	10:58:48.475	Dealer	'28101': dealer has been stopped
+0	10:58:48.475	IMTRequestSink	unsubscribed from IMTRequestSink
+0	10:58:48.475	IMTTickSink	unsubscribed from IMTTickSink
+0	10:58:48.475	IMTPositionSink	unsubscribed from IMTPositionSink
+0	10:58:48.475	IMTManagerSink	unsubscribed from IMTManagerSink
+0	10:58:48.491	Dealer	'28101': dealer has been stopped
+0	10:58:48.491	Network	'28101': disconnected from StarwaveFX-Server
+0	10:58:48.507	Accounts	saving to disk
+0	10:58:48.507	Accounts	1 records saved
+0	10:58:49.033	Exit	MetaTrader 5 Manager API stopped
+0	10:58:57.983		
+0	10:58:57.983	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	10:58:57.983	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	10:58:57.999	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	10:58:58.475	Network	'28101': authorized on StarwaveFX-Server
+0	10:58:58.475	StarwaveFX-Server	'28101': bases are initializing...
+0	10:58:58.475	Accounts	1 records loaded in 0 ms
+0	10:58:58.475	Accounts	synchronization started
+0	10:58:58.475	Orders	synchronization started
+0	10:58:58.475	Positions	synchronization started
+0	10:58:58.619	Accounts	synchronization - 0 records received
+0	10:58:58.619	Orders	synchronization - 0 records received
+0	10:58:58.619	Positions	synchronization - 0 records received
+0	10:58:58.619	Accounts	0 of 1 records synchronized
+0	10:58:58.619	Accounts	saving to disk
+0	10:58:58.635	Orders	0 of 0 records synchronized
+0	10:58:58.635	Positions	0 of 0 records synchronized
+0	10:58:58.635	Accounts	1 records saved
+0	10:58:58.635	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	10:58:58.635	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	10:58:58.651	TradeCenter	1 groups initialized in 31 ms
+0	10:58:58.651	IMTManagerSink	subscribed on IMTManagerSink
+0	10:58:58.651	IMTTickSink	subscribed on IMTTickSink
+0	10:58:58.651	IMTPositionSink	subscribed on IMTPositionSink
+0	10:58:58.651	IMTRequestSink	subscribed on IMTRequestSink
+0	10:58:58.803	Dealer	'28101': dealer has been started
+0	10:59:00.022	Network	'28101': scanning network
+0	10:59:00.861	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 136 msec)
+0	10:59:01.709	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 177 msec)
+0	10:59:01.710	Network	'28101': scanning network finished
+0	11:02:28.757	Dealer	'28101': dealer has been stopped
+0	11:02:28.757	IMTRequestSink	unsubscribed from IMTRequestSink
+0	11:02:28.757	IMTTickSink	unsubscribed from IMTTickSink
+0	11:02:28.757	IMTPositionSink	unsubscribed from IMTPositionSink
+0	11:02:28.757	IMTManagerSink	unsubscribed from IMTManagerSink
+0	11:02:28.757	Network	'28101': disconnected from StarwaveFX-Server
+2	11:02:28.757	Dealer	'28101': dealer stopping failed (4)
+0	11:02:28.789	Accounts	saving to disk
+0	11:02:28.789	Accounts	1 records saved
+0	11:02:29.316	Exit	MetaTrader 5 Manager API stopped
+0	11:02:37.147		
+0	11:02:37.147	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	11:02:37.147	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	11:02:37.147	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	11:02:37.595	Network	'28101': authorized on StarwaveFX-Server
+0	11:02:37.627	StarwaveFX-Server	'28101': bases are initializing...
+0	11:02:37.627	Accounts	1 records loaded in 0 ms
+0	11:02:37.627	Accounts	synchronization started
+0	11:02:37.627	Orders	synchronization started
+0	11:02:37.627	Positions	synchronization started
+0	11:02:37.772	Accounts	synchronization - 0 records received
+0	11:02:37.772	Orders	synchronization - 0 records received
+0	11:02:37.772	Positions	synchronization - 0 records received
+0	11:02:37.772	Accounts	0 of 1 records synchronized
+0	11:02:37.772	Accounts	saving to disk
+0	11:02:37.772	Orders	0 of 0 records synchronized
+0	11:02:37.772	Positions	0 of 0 records synchronized
+0	11:02:37.772	Accounts	1 records saved
+0	11:02:37.772	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	11:02:37.772	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	11:02:37.786	TradeCenter	1 groups initialized in 15 ms
+0	11:02:37.786	IMTManagerSink	subscribed on IMTManagerSink
+0	11:02:37.786	IMTTickSink	subscribed on IMTTickSink
+0	11:02:37.786	IMTPositionSink	subscribed on IMTPositionSink
+0	11:02:37.786	IMTRequestSink	subscribed on IMTRequestSink
+0	11:02:37.929	Dealer	'28101': dealer has been started
+0	11:02:39.191	Network	'28101': scanning network
+0	11:02:39.991	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 128 msec)
+0	11:02:40.845	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 173 msec)
+0	11:02:40.845	Network	'28101': scanning network finished
+0	11:04:31.619	Dealer	'28101': dealer has been stopped
+0	11:04:31.619	IMTRequestSink	unsubscribed from IMTRequestSink
+0	11:04:31.619	IMTTickSink	unsubscribed from IMTTickSink
+0	11:04:31.619	IMTPositionSink	unsubscribed from IMTPositionSink
+0	11:04:31.619	IMTManagerSink	unsubscribed from IMTManagerSink
+0	11:04:31.619	Network	'28101': disconnected from StarwaveFX-Server
+2	11:04:31.619	Dealer	'28101': dealer stopping failed (4)
+0	11:04:31.683	Accounts	saving to disk
+0	11:04:31.683	Accounts	1 records saved
+0	11:04:32.209	Exit	MetaTrader 5 Manager API stopped
+0	11:04:43.198		
+0	11:04:43.198	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	11:04:43.198	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	11:04:43.214	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	11:04:43.647	Network	'28101': authorized on StarwaveFX-Server
+0	11:04:43.647	StarwaveFX-Server	'28101': bases are initializing...
+0	11:04:43.647	Accounts	1 records loaded in 0 ms
+0	11:04:43.647	Accounts	synchronization started
+0	11:04:43.647	Orders	synchronization started
+0	11:04:43.647	Positions	synchronization started
+0	11:04:43.772	Accounts	synchronization - 0 records received
+0	11:04:43.772	Orders	synchronization - 0 records received
+0	11:04:43.772	Positions	synchronization - 0 records received
+0	11:04:43.788	Accounts	0 of 1 records synchronized
+0	11:04:43.788	Accounts	saving to disk
+0	11:04:43.788	Orders	0 of 0 records synchronized
+0	11:04:43.788	Positions	0 of 0 records synchronized
+0	11:04:43.788	Accounts	1 records saved
+0	11:04:43.788	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	11:04:43.788	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	11:04:43.804	TradeCenter	1 groups initialized in 16 ms
+0	11:04:43.804	IMTManagerSink	subscribed on IMTManagerSink
+0	11:04:43.804	IMTTickSink	subscribed on IMTTickSink
+0	11:04:43.804	IMTPositionSink	subscribed on IMTPositionSink
+0	11:04:43.804	IMTRequestSink	subscribed on IMTRequestSink
+0	11:04:43.930	Dealer	'28101': dealer has been started
+0	11:04:45.255	Network	'28101': scanning network
+0	11:04:46.069	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 133 msec)
+0	11:04:46.971	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 189 msec)
+0	11:04:46.971	Network	'28101': scanning network finished
+0	11:09:39.254	Dealer	'28101': dealer has been stopped
+0	11:09:39.254	IMTRequestSink	unsubscribed from IMTRequestSink
+0	11:09:39.254	Dealer	'28101': dealer has been stopped
+0	11:09:39.254	IMTTickSink	unsubscribed from IMTTickSink
+0	11:09:39.254	IMTPositionSink	unsubscribed from IMTPositionSink
+0	11:09:39.254	IMTManagerSink	unsubscribed from IMTManagerSink
+0	11:09:39.254	Network	'28101': disconnected from StarwaveFX-Server
+0	11:09:39.270	Accounts	saving to disk
+0	11:09:39.272	Accounts	1 records saved
+0	11:09:39.777	Exit	MetaTrader 5 Manager API stopped
+0	11:09:49.959		
+0	11:09:49.959	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	11:09:49.959	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	11:09:49.972	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	11:09:50.402	Network	'28101': authorized on StarwaveFX-Server
+0	11:09:50.418	StarwaveFX-Server	'28101': bases are initializing...
+0	11:09:50.418	Accounts	1 records loaded in 0 ms
+0	11:09:50.418	Accounts	synchronization started
+0	11:09:50.418	Orders	synchronization started
+0	11:09:50.418	Positions	synchronization started
+0	11:09:50.553	Accounts	synchronization - 0 records received
+0	11:09:50.553	Orders	synchronization - 0 records received
+0	11:09:50.553	Positions	synchronization - 0 records received
+0	11:09:50.553	Accounts	0 of 1 records synchronized
+0	11:09:50.553	Accounts	saving to disk
+0	11:09:50.562	Orders	0 of 0 records synchronized
+0	11:09:50.562	Positions	0 of 0 records synchronized
+0	11:09:50.562	Accounts	1 records saved
+0	11:09:50.562	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	11:09:50.562	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	11:09:50.562	TradeCenter	1 groups initialized in 0 ms
+0	11:09:50.577	IMTManagerSink	subscribed on IMTManagerSink
+0	11:09:50.577	IMTTickSink	subscribed on IMTTickSink
+0	11:09:50.577	IMTPositionSink	subscribed on IMTPositionSink
+0	11:09:50.585	IMTRequestSink	subscribed on IMTRequestSink
+0	11:09:50.709	Dealer	'28101': dealer has been started
+0	11:09:52.022	Network	'28101': scanning network
+0	11:09:52.791	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 127 msec)
+0	11:09:53.633	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 175 msec)
+0	11:09:53.633	Network	'28101': scanning network finished
+0	11:14:54.763	Dealer	'28101': dealer has been stopped
+0	11:14:54.772	IMTRequestSink	unsubscribed from IMTRequestSink
+0	11:14:54.772	IMTTickSink	unsubscribed from IMTTickSink
+0	11:14:54.772	IMTPositionSink	unsubscribed from IMTPositionSink
+0	11:14:54.772	IMTManagerSink	unsubscribed from IMTManagerSink
+0	11:14:54.772	Network	'28101': disconnected from StarwaveFX-Server
+2	11:14:54.772	Dealer	'28101': dealer stopping failed (4)
+0	11:14:54.795	Accounts	saving to disk
+0	11:14:54.795	Accounts	1 records saved
+0	11:14:55.306	Exit	MetaTrader 5 Manager API stopped
+0	11:15:05.163		
+0	11:15:05.163	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	11:15:05.163	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	11:15:05.178	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	11:15:05.622	Network	'28101': authorized on StarwaveFX-Server
+0	11:15:05.622	StarwaveFX-Server	'28101': bases are initializing...
+0	11:15:05.622	Accounts	1 records loaded in 0 ms
+0	11:15:05.622	Accounts	synchronization started
+0	11:15:05.622	Orders	synchronization started
+0	11:15:05.622	Positions	synchronization started
+0	11:15:05.765	Accounts	synchronization - 0 records received
+0	11:15:05.765	Orders	synchronization - 0 records received
+0	11:15:05.765	Positions	synchronization - 0 records received
+0	11:15:05.772	Accounts	0 of 1 records synchronized
+0	11:15:05.772	Accounts	saving to disk
+0	11:15:05.781	Orders	0 of 0 records synchronized
+0	11:15:05.781	Positions	0 of 0 records synchronized
+0	11:15:05.781	Accounts	1 records saved
+0	11:15:05.781	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	11:15:05.781	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	11:15:05.781	TradeCenter	1 groups initialized in 0 ms
+0	11:15:05.781	IMTManagerSink	subscribed on IMTManagerSink
+0	11:15:05.781	IMTTickSink	subscribed on IMTTickSink
+0	11:15:05.781	IMTPositionSink	subscribed on IMTPositionSink
+0	11:15:05.781	IMTRequestSink	subscribed on IMTRequestSink
+0	11:15:05.929	Dealer	'28101': dealer has been started
+0	11:15:07.216	Network	'28101': scanning network
+0	11:15:08.007	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 129 msec)
+0	11:15:08.866	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 180 msec)
+0	11:15:08.866	Network	'28101': scanning network finished
+0	11:15:24.536	Dealer	'28101': dealer has been stopped
+0	11:15:24.536	IMTRequestSink	unsubscribed from IMTRequestSink
+0	11:15:24.536	IMTTickSink	unsubscribed from IMTTickSink
+0	11:15:24.536	IMTPositionSink	unsubscribed from IMTPositionSink
+0	11:15:24.536	IMTManagerSink	unsubscribed from IMTManagerSink
+0	11:15:24.536	Network	'28101': disconnected from StarwaveFX-Server
+2	11:15:24.536	Dealer	'28101': dealer stopping failed (9)
+0	11:15:24.568	Accounts	saving to disk
+0	11:15:24.568	Accounts	1 records saved
+0	11:15:25.090	Exit	MetaTrader 5 Manager API stopped
+0	11:15:36.562		
+0	11:15:36.562	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	11:15:36.562	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	11:15:36.584	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	11:15:37.039	Network	'28101': authorized on StarwaveFX-Server
+0	11:15:37.054	StarwaveFX-Server	'28101': bases are initializing...
+0	11:15:37.054	Accounts	1 records loaded in 0 ms
+0	11:15:37.054	Accounts	synchronization started
+0	11:15:37.054	Orders	synchronization started
+0	11:15:37.054	Positions	synchronization started
+0	11:15:37.198	Accounts	synchronization - 0 records received
+0	11:15:37.198	Orders	synchronization - 0 records received
+0	11:15:37.198	Positions	synchronization - 0 records received
+0	11:15:37.198	Accounts	0 of 1 records synchronized
+0	11:15:37.198	Accounts	saving to disk
+0	11:15:37.214	Orders	0 of 0 records synchronized
+0	11:15:37.214	Positions	0 of 0 records synchronized
+0	11:15:37.214	Accounts	1 records saved
+0	11:15:37.214	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	11:15:37.214	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	11:15:37.214	TradeCenter	1 groups initialized in 0 ms
+0	11:15:37.214	IMTManagerSink	subscribed on IMTManagerSink
+0	11:15:37.214	IMTTickSink	subscribed on IMTTickSink
+0	11:15:37.214	IMTPositionSink	subscribed on IMTPositionSink
+0	11:15:37.214	IMTRequestSink	subscribed on IMTRequestSink
+0	11:15:37.369	Dealer	'28101': dealer has been started
+0	11:15:38.600	Network	'28101': scanning network
+0	11:15:39.353	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 120 msec)
+0	11:15:40.181	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 173 msec)
+0	11:15:40.181	Network	'28101': scanning network finished
+0	11:18:58.554	Dealer	'28101': dealer has been stopped
+0	11:18:58.554	IMTRequestSink	unsubscribed from IMTRequestSink
+0	11:18:58.554	IMTTickSink	unsubscribed from IMTTickSink
+0	11:18:58.554	IMTPositionSink	unsubscribed from IMTPositionSink
+0	11:18:58.554	IMTManagerSink	unsubscribed from IMTManagerSink
+0	11:18:58.570	Dealer	'28101': dealer has been stopped
+0	11:18:58.570	Network	'28101': disconnected from StarwaveFX-Server
+0	11:18:58.585	Accounts	saving to disk
+0	11:18:58.586	Accounts	1 records saved
+0	11:18:59.116	Exit	MetaTrader 5 Manager API stopped
+0	11:19:08.647		
+0	11:19:08.647	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	11:19:08.647	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	11:19:08.663	Network	'28101': connecting to '84.201.6.142:443' (84.201.6.142:443)
+0	11:19:09.120	Network	'28101': authorized on StarwaveFX-Server
+0	11:19:09.120	StarwaveFX-Server	'28101': bases are initializing...
+0	11:19:09.136	Accounts	1 records loaded in 16 ms
+0	11:19:09.136	Accounts	synchronization started
+0	11:19:09.136	Orders	synchronization started
+0	11:19:09.136	Positions	synchronization started
+0	11:19:09.272	Accounts	synchronization - 0 records received
+0	11:19:09.272	Orders	synchronization - 0 records received
+0	11:19:09.272	Positions	synchronization - 0 records received
+0	11:19:09.272	Accounts	0 of 1 records synchronized
+0	11:19:09.272	Accounts	saving to disk
+0	11:19:09.272	Orders	0 of 0 records synchronized
+0	11:19:09.272	Positions	0 of 0 records synchronized
+0	11:19:09.280	Accounts	1 records saved
+0	11:19:09.280	Network	'28101': manager synchronized: 1 users, 0 orders, 0 positions, 1 groups, 3248 symbols, 0 spreads, 0 subscriptions
+0	11:19:09.280	Network	'28101': server's trading time differs from the local one by 02:00 hour(s)
+0	11:19:09.280	TradeCenter	1 groups initialized in 0 ms
+0	11:19:09.280	IMTManagerSink	subscribed on IMTManagerSink
+0	11:19:09.296	IMTTickSink	subscribed on IMTTickSink
+0	11:19:09.296	IMTPositionSink	subscribed on IMTPositionSink
+0	11:19:09.296	IMTRequestSink	subscribed on IMTRequestSink
+0	11:19:09.428	Dealer	'28101': dealer has been started
+0	11:19:10.682	Network	'28101': scanning network
+0	11:19:11.463	StarwaveFX-Server	'28101': access point 'Access Server' (84.201.6.142:443) is available (ping 129 msec)
+0	11:19:12.306	StarwaveFX-Server	'28101': access point 'Access Server' (185.82.73.106:443) is available (ping 176 msec)
+0	11:19:12.306	Network	'28101': scanning network finished
+0	14:24:07.417	Dealer	'28101': dealer has been stopped
+0	14:24:07.417	IMTRequestSink	unsubscribed from IMTRequestSink
+0	14:24:07.417	IMTTickSink	unsubscribed from IMTTickSink
+0	14:24:07.417	IMTPositionSink	unsubscribed from IMTPositionSink
+0	14:24:07.417	IMTManagerSink	unsubscribed from IMTManagerSink
+0	14:24:07.430	Dealer	'28101': dealer has been stopped
+0	14:24:07.430	Network	'28101': disconnected from StarwaveFX-Server
+0	14:24:07.481	Accounts	saving to disk
+0	14:24:07.481	Accounts	1 records saved
+0	14:24:08.024	Exit	MetaTrader 5 Manager API stopped
+0	14:24:15.665		
+0	14:24:15.665	Startup	MetaTrader 5 Manager API build 5480 x64/CLANG (14 Dec 2025)
+0	14:24:15.665	Startup	Copyright 2000-2025, MetaQuotes Ltd.
+0	14:24:15.681	Network	'28003': connecting to '176.126.66.38' (176.126.66.38)
+0	14:24:16.117	Network	'28003': authorized on MajestyFX-Trade
+0	14:24:16.117	MajestyFX-Trade	'28003': bases are initializing...
+0	14:24:16.117	Accounts	synchronization started
+0	14:24:16.117	Orders	synchronization started
+0	14:24:16.117	Positions	synchronization started
+0	14:24:16.635	Accounts	synchronization - 10 records received
+0	14:24:16.635	Orders	synchronization - 0 records received
+0	14:24:16.635	Positions	synchronization - 0 records received
+0	14:24:16.635	Accounts	10 of 10 records synchronized
+0	14:24:16.635	Accounts	saving to disk
+0	14:24:16.652	Orders	0 of 0 records synchronized
+0	14:24:16.652	Positions	0 of 0 records synchronized
+0	14:24:16.652	Accounts	10 records saved
+0	14:24:16.652	Network	'28003': manager synchronized: 10 users, 0 orders, 0 positions, 6 groups, 504 symbols, 0 spreads, 0 subscriptions
+0	14:24:16.652	Network	'28003': server's trading time differs from the local one by 01:00 hour(s)
+0	14:24:16.688	TradeCenter	6 groups initialized in 47 ms
+0	14:24:16.689	IMTManagerSink	subscribed on IMTManagerSink
+0	14:24:16.693	IMTTickSink	subscribed on IMTTickSink
+0	14:24:16.703	IMTPositionSink	subscribed on IMTPositionSink
+0	14:24:16.705	IMTRequestSink	subscribed on IMTRequestSink
+0	14:24:16.838	Dealer	'28003': dealer has been started
+0	14:24:17.695	Network	'28003': scanning network
+0	14:24:18.711	MajestyFX-Trade	'28003': access point 'Access Server NL' (82.118.228.200:443) is available (ping 179 msec)
+0	14:24:19.617	MajestyFX-Trade	'28003': access point 'NS Access Server' (176.126.66.38:443) is available (ping 180 msec)
+0	14:24:19.617	Network	'28003': scanning network finished
