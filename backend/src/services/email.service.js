@@ -132,6 +132,7 @@ async function getTransporter() {
     port: smtp.port,
     secure: smtp.port === 465,
     auth: { user: smtp.user, pass: smtp.password },
+    tls: { rejectUnauthorized: false },
   });
   _transporter._configKey = key;
   return _transporter;
