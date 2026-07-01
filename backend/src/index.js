@@ -273,109 +273,109 @@ const startServer = async () => {
       // ── users — V2 2FA + IP columns (may be missing on DBs migrated from V1) ──
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN last_login_ip VARCHAR(255) NULL DEFAULT NULL`,
         name: 'users.last_login_ip'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN two_factor_secret VARCHAR(255) NULL DEFAULT NULL`,
         name: 'users.two_factor_secret'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS two_factor_method ENUM('email','totp') NOT NULL DEFAULT 'email'`,
+                ADD COLUMN two_factor_method ENUM('email','totp') NOT NULL DEFAULT 'email'`,
         name: 'users.two_factor_method'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS email_otp_code VARCHAR(10) NULL DEFAULT NULL`,
+                ADD COLUMN email_otp_code VARCHAR(10) NULL DEFAULT NULL`,
         name: 'users.email_otp_code'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS email_otp_expires DATETIME NULL DEFAULT NULL`,
+                ADD COLUMN email_otp_expires DATETIME NULL DEFAULT NULL`,
         name: 'users.email_otp_expires'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS referral_code VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN referral_code VARCHAR(255) NULL DEFAULT NULL`,
         name: 'users.referral_code'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS referred_by BIGINT NULL DEFAULT NULL`,
+                ADD COLUMN referred_by BIGINT NULL DEFAULT NULL`,
         name: 'users.referred_by'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN email_verification_token VARCHAR(255) NULL DEFAULT NULL`,
         name: 'users.email_verification_token'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS email_verification_expires DATETIME NULL DEFAULT NULL`,
+                ADD COLUMN email_verification_expires DATETIME NULL DEFAULT NULL`,
         name: 'users.email_verification_expires'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN password_reset_token VARCHAR(255) NULL DEFAULT NULL`,
         name: 'users.password_reset_token'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS password_reset_expires DATETIME NULL DEFAULT NULL`,
+                ADD COLUMN password_reset_expires DATETIME NULL DEFAULT NULL`,
         name: 'users.password_reset_expires'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS phone_number VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN phone_number VARCHAR(255) NULL DEFAULT NULL`,
         name: 'users.phone_number'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS kyc_status ENUM('pending','approved','rejected','expired') NOT NULL DEFAULT 'pending'`,
+                ADD COLUMN kyc_status ENUM('pending','approved','rejected','expired') NOT NULL DEFAULT 'pending'`,
         name: 'users.kyc_status'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS email_verified TINYINT(1) NOT NULL DEFAULT 0`,
+                ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0`,
         name: 'users.email_verified'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS two_factor_enabled TINYINT(1) NOT NULL DEFAULT 0`,
+                ADD COLUMN two_factor_enabled TINYINT(1) NOT NULL DEFAULT 0`,
         name: 'users.two_factor_enabled'
       },
       {
         sql: `ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS last_login DATETIME NULL DEFAULT NULL`,
+                ADD COLUMN last_login DATETIME NULL DEFAULT NULL`,
         name: 'users.last_login'
       },
       // copy_trade_followers — lot sizing columns added in V2
       {
         sql: `ALTER TABLE copy_trade_followers
-                ADD COLUMN IF NOT EXISTS lot_mode ENUM('ratio','fixed','equity_pct') NOT NULL DEFAULT 'ratio'`,
+                ADD COLUMN lot_mode ENUM('ratio','fixed','equity_pct') NOT NULL DEFAULT 'ratio'`,
         name: 'copy_trade_followers.lot_mode'
       },
       {
         sql: `ALTER TABLE copy_trade_followers
-                ADD COLUMN IF NOT EXISTS fixed_lot DECIMAL(18,4) NULL DEFAULT NULL`,
+                ADD COLUMN fixed_lot DECIMAL(18,4) NULL DEFAULT NULL`,
         name: 'copy_trade_followers.fixed_lot'
       },
       {
         sql: `ALTER TABLE copy_trade_followers
-                ADD COLUMN IF NOT EXISTS equity_pct DECIMAL(6,2) NULL DEFAULT NULL`,
+                ADD COLUMN equity_pct DECIMAL(6,2) NULL DEFAULT NULL`,
         name: 'copy_trade_followers.equity_pct'
       },
       {
         sql: `ALTER TABLE copy_trade_followers
-                ADD COLUMN IF NOT EXISTS max_lot_per_trade DECIMAL(18,4) NULL DEFAULT NULL`,
+                ADD COLUMN max_lot_per_trade DECIMAL(18,4) NULL DEFAULT NULL`,
         name: 'copy_trade_followers.max_lot_per_trade'
       },
       // risk_pct — required for risk_pct lot mode
       {
         sql: `ALTER TABLE copy_trade_followers
-                ADD COLUMN IF NOT EXISTS risk_pct DECIMAL(6,2) NULL DEFAULT NULL`,
+                ADD COLUMN risk_pct DECIMAL(6,2) NULL DEFAULT NULL`,
         name: 'copy_trade_followers.risk_pct'
       },
       // Expand lot_mode ENUM to include balance_ratio and risk_pct
@@ -387,13 +387,13 @@ const startServer = async () => {
       // closed_at on copy_trades for sync service
       {
         sql: `ALTER TABLE copy_trades
-                ADD COLUMN IF NOT EXISTS closed_at DATETIME NULL DEFAULT NULL`,
+                ADD COLUMN closed_at DATETIME NULL DEFAULT NULL`,
         name: 'copy_trades.closed_at'
       },
       // kyc_documents — back_image added for ID proof back side
       {
         sql: `ALTER TABLE kyc_documents
-                ADD COLUMN IF NOT EXISTS back_image VARCHAR(255) NULL DEFAULT NULL`,
+                ADD COLUMN back_image VARCHAR(255) NULL DEFAULT NULL`,
         name: 'kyc_documents.back_image'
       }
     ];
