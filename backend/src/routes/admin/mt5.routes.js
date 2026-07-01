@@ -24,6 +24,7 @@ router.post('/withdraw', mt5Controller.withdrawFunds);
 // Trading Data
 router.get('/positions', mt5Controller.getAllPositions);
 router.get('/positions/:login', mt5Controller.getPositionsByLogin);
+router.post('/positions/:login/:ticket/close', mt5Controller.closePosition);
 router.get('/deals/:login', mt5Controller.getDealHistory);
 
 // Groups

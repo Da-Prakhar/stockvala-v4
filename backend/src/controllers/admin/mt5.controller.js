@@ -809,6 +809,27 @@ export const getBBookRiskMonitor = async (req, res, next) => {
   }
 };
 
+/**
+ * Close a position by ticket number (admin action)
+ * POST /admin/mt5/positions/:login/:ticket/close
+ */
+export const closePosition = async (req, res, next) => {
+  try {
+    const { login, ticket } = req.params;
+    const { symbol = '', comment = 'Admin CRM Close', volume = 0 } = req.body;
+
+    if (!login || !ticket) {
+      return res.status(400).json({ success: false, message: 'login and ticket are required' });
+    }
+
+    const result = await mt5Service.closeTrade(login, parseInt(ticket), parseFloat(volume), symbol, comment);
+    res.json(successResponse(result, `Position #${ticket} closed on account ${login}`));
+  } catch (error) {
+    console.error(`[ClosePosition] Error closing ticket ${req.params.ticket}:`, error.message);
+    next(error);
+  }
+};
+
 export default {
   healthCheck,
   connectServer,
@@ -829,6 +850,7 @@ export default {
   getIBHierarchy,
   changeLeverage,
   changeAccountPassword,
+  closePosition,
   syncUserAccounts,
   testConnection,
   reloadConfig

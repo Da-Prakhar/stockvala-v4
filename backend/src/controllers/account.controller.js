@@ -552,6 +552,28 @@ export const syncAccount = async (req, res, next) => {
   }
 };
 
+/**
+ * Set/change trading password for an MT5 account (user-facing)
+ * POST /accounts/:id/change-password
+ * Body: { password: string, type?: 'trader' | 'investor' }
+ */
+export const changePassword = async (req, res, next) => {
+  try {
+    const account = await Mt5Account.findOne({ where: { id: req.params.id, userId: req.user.id } });
+    if (!account) throw new NotFoundError('Account not found');
+
+    const { password, type = 'trader' } = req.body;
+    if (!password || password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    }
+
+    await mt5Service.changePassword(account.mt5Login, password, type);
+    res.json(successResponse(null, `${type === 'investor' ? 'Investor' : 'Trading'} password updated for account ${account.mt5Login}`));
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getServerDisplayName,
   getUserAccounts,
@@ -559,5 +581,6 @@ export default {
   getAccountDetails,
   updateLeverage,
   getAccountPositions,
-  syncAccount
+  syncAccount,
+  changePassword
 };

@@ -20,6 +20,7 @@ router.post('/create', verifyToken, validate(schemas.createAccount), accountCont
 router.get('/:id', verifyToken, accountController.getAccountDetails);
 router.get('/:id/positions', verifyToken, accountController.getAccountPositions);
 router.post('/:id/sync', verifyToken, accountController.syncAccount);
+router.post('/:id/change-password', verifyToken, accountController.changePassword);
 router.put('/:id/leverage', verifyToken, validate(schemas.updateLeverage), accountController.updateLeverage);
 
 export default router;
