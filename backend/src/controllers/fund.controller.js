@@ -1,6 +1,7 @@
-import { Deposit, Withdrawal, PaymentMethod, Mt5Account, BrokerSetting } from '../models/index.js';
+import { Deposit, Withdrawal, PaymentMethod, Mt5Account, BrokerSetting, User } from '../models/index.js';
 import { NotFoundError, BusinessError } from '../utils/errors.js';
 import { successResponse } from '../utils/response.js';
+import emailService from '../services/email.service.js';
 
 /**
  * Create deposit
@@ -17,6 +18,11 @@ export const createDeposit = async (req, res, next) => {
       transactionRef: transactionRef || null,
       status: 'pending'
     });
+
+    // Email: deposit received
+    User.findByPk(req.user.id, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendDepositSubmittedEmail(u.email, u.firstName, { amount, id: deposit.id }).catch(() => {});
+    }).catch(() => {});
 
     res.status(201).json(successResponse(deposit, 'Deposit created'));
   } catch (error) {
@@ -91,6 +97,11 @@ export const createWithdrawal = async (req, res, next) => {
       withdrawalDetails: withdrawalDetails || null,
       status: 'pending'
     });
+
+    // Email: withdrawal received
+    User.findByPk(req.user.id, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendWithdrawalSubmittedEmail(u.email, u.firstName, { amount, id: withdrawal.id }).catch(() => {});
+    }).catch(() => {});
 
     res.status(201).json(successResponse(withdrawal, 'Withdrawal created'));
   } catch (error) {

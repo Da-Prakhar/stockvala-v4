@@ -590,8 +590,8 @@ export const sendTwoFactorOtpEmail = async (email, otp, firstName) => {
       <p>Hi ${firstName || 'there'}, use the code below to complete your login to ${company.name}.</p>
     </div>
     <div style="text-align:center;margin:28px 0;">
-      <div style="display:inline-block;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #3b82f6;border-radius:16px;padding:20px 48px;">
-        <span style="font-size:36px;font-weight:800;color:#ffffff;letter-spacing:10px;font-family:monospace;">${otp}</span>
+      <div style="display:inline-block;background:#ffffff;border:2px solid #3b82f6;border-radius:16px;padding:20px 48px;">
+        <span style="font-size:36px;font-weight:800;color:#1e293b;letter-spacing:10px;font-family:monospace;">${otp}</span>
       </div>
     </div>
     <div class="info-box" style="text-align:center;">
@@ -613,6 +613,128 @@ const sendGenericEmail = async (to, subject, htmlBody) => {
   return sendEmail(to, subject, '', htmlBody);
 };
 
+export const sendDepositSubmittedEmail = async (email, firstName, depositData) => {
+  const company = await getCompany();
+  const subject = `Deposit Request Received — ${company.name}`;
+  const text = `Hi ${firstName}, your deposit request of $${depositData.amount} has been received and is under review.`;
+  const html = baseLayout(company, `
+    <div style="text-align:center;">
+      <div class="icon-circle" style="background:rgba(59,130,246,0.15);">📥</div>
+      <h2>Deposit Request Received</h2>
+      <p>Hi ${firstName || 'there'}, we've received your deposit request and it is now under review by our team.</p>
+    </div>
+    <div class="info-box">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Amount</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#3b82f6;font-size:16px;font-weight:700;">$${depositData.amount}</span></td>
+        </tr>
+        ${depositData.id ? `<tr><td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Reference #</span></td><td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;">${depositData.id}</span></td></tr>` : ''}
+        <tr>
+          <td style="padding:8px 0;"><span style="color:#64748b;font-size:13px;">Status</span></td>
+          <td style="padding:8px 0;text-align:right;"><span class="badge badge-warning">Under Review</span></td>
+        </tr>
+      </table>
+    </div>
+    <p style="color:#94a3b8;font-size:14px;text-align:center;">We'll notify you once your deposit is approved. This typically takes less than 24 hours.</p>
+    <div style="text-align:center;margin-top:24px;"><a href="${company.website}/fund" class="btn">View Status →</a></div>
+  `, `Your deposit request of $${depositData.amount} is under review.`);
+  return sendEmail(email, subject, text, html);
+};
+
+export const sendDepositRejectedEmail = async (email, firstName, depositData) => {
+  const company = await getCompany();
+  const subject = `Deposit Request Update — ${company.name}`;
+  const text = `Hi ${firstName}, your deposit request of $${depositData.amount} was not approved. Reason: ${depositData.reason || 'Please contact support.'}`;
+  const html = baseLayout(company, `
+    <div style="text-align:center;">
+      <div class="icon-circle" style="background:rgba(239,68,68,0.15);">❌</div>
+      <h2>Deposit Not Approved</h2>
+      <p>Hi ${firstName || 'there'}, unfortunately your deposit request could not be processed at this time.</p>
+    </div>
+    <div class="info-box">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Amount</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:16px;font-weight:700;">$${depositData.amount}</span></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Status</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span class="badge badge-danger">Rejected</span></td>
+        </tr>
+      </table>
+      ${depositData.reason ? `<div style="margin-top:16px;padding:12px;background:rgba(239,68,68,0.08);border-radius:8px;border-left:3px solid #ef4444;"><p style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px;">Reason:</p><p style="color:#f87171;font-size:14px;font-weight:500;margin:0;">${depositData.reason}</p></div>` : ''}
+    </div>
+    <p style="color:#94a3b8;font-size:14px;text-align:center;">If you believe this is an error or need assistance, please contact our support team.</p>
+    <div style="text-align:center;margin-top:24px;"><a href="${company.website}/support" class="btn">Contact Support →</a></div>
+  `, `Your deposit request of $${depositData.amount} was not approved.`);
+  return sendEmail(email, subject, text, html);
+};
+
+export const sendWithdrawalSubmittedEmail = async (email, firstName, withdrawalData) => {
+  const company = await getCompany();
+  const subject = `Withdrawal Request Received — ${company.name}`;
+  const text = `Hi ${firstName}, your withdrawal request of $${withdrawalData.amount} has been submitted and is under review.`;
+  const html = baseLayout(company, `
+    <div style="text-align:center;">
+      <div class="icon-circle" style="background:rgba(139,92,246,0.15);">🏦</div>
+      <h2>Withdrawal Request Submitted</h2>
+      <p>Hi ${firstName || 'there'}, your withdrawal request has been submitted and is being reviewed by our team.</p>
+    </div>
+    <div class="info-box">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Amount</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#a855f7;font-size:16px;font-weight:700;">$${withdrawalData.amount}</span></td>
+        </tr>
+        ${withdrawalData.id ? `<tr><td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Reference #</span></td><td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;">${withdrawalData.id}</span></td></tr>` : ''}
+        <tr>
+          <td style="padding:8px 0;"><span style="color:#64748b;font-size:13px;">Status</span></td>
+          <td style="padding:8px 0;text-align:right;"><span class="badge badge-warning">Under Review</span></td>
+        </tr>
+      </table>
+    </div>
+    <p style="color:#94a3b8;font-size:14px;text-align:center;">Withdrawals are typically processed within 1-3 business days. We'll email you once it's approved.</p>
+    <div style="text-align:center;margin-top:24px;"><a href="${company.website}/fund" class="btn">View Status →</a></div>
+  `, `Your withdrawal request of $${withdrawalData.amount} is under review.`);
+  return sendEmail(email, subject, text, html);
+};
+
+export const sendCopyTradeFollowEmail = async (email, firstName, tradeData) => {
+  const company = await getCompany();
+  const subject = `Now Copying ${tradeData.masterName} — ${company.name}`;
+  const text = `Hi ${firstName}, you are now copying ${tradeData.masterName} with an allocation of $${tradeData.allocation}.`;
+  const html = baseLayout(company, `
+    <div style="text-align:center;">
+      <div class="icon-circle" style="background:rgba(168,85,247,0.15);">📈</div>
+      <h2>Copy Trading Active!</h2>
+      <p>Hi ${firstName || 'there'}, you're now copying <strong style="color:#a855f7;">${tradeData.masterName}</strong>. Trades will be mirrored to your account automatically.</p>
+    </div>
+    <div class="info-box">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Master Trader</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;">${tradeData.masterName}</span></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Allocation</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#a855f7;font-size:15px;font-weight:700;">$${tradeData.allocation}</span></td>
+        </tr>
+        ${tradeData.copyRatio ? `<tr><td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Copy Ratio</span></td><td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;">${tradeData.copyRatio}x</span></td></tr>` : ''}
+        <tr>
+          <td style="padding:8px 0;"><span style="color:#64748b;font-size:13px;">Status</span></td>
+          <td style="padding:8px 0;text-align:right;"><span class="badge badge-success">Active</span></td>
+        </tr>
+      </table>
+    </div>
+    <div style="padding:16px;background:rgba(234,179,8,0.08);border-radius:8px;border-left:3px solid #eab308;margin-top:16px;">
+      <p style="color:#fbbf24;font-size:13px;margin:0;">⚠️ <strong>Risk Reminder:</strong> Past performance does not guarantee future results. Only invest what you can afford to lose.</p>
+    </div>
+    <div style="text-align:center;margin-top:24px;"><a href="${company.website}/copy-trading" class="btn">View Copy Trading →</a></div>
+  `, `You are now copying ${tradeData.masterName} on ${company.name}.`);
+  return sendEmail(email, subject, text, html);
+};
+
 export default {
   sendWelcomeEmail,
   sendPasswordResetEmail,
@@ -620,7 +742,11 @@ export default {
   sendTwoFactorOtpEmail,
   sendDepositConfirmationEmail,
   sendWithdrawalConfirmationEmail,
+  sendDepositSubmittedEmail,
+  sendDepositRejectedEmail,
+  sendWithdrawalSubmittedEmail,
   sendWithdrawalRejectedEmail,
+  sendCopyTradeFollowEmail,
   sendKycSubmissionEmail,
   sendKycApprovedEmail,
   sendKycRejectedEmail,

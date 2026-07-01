@@ -3,6 +3,7 @@ import { NotFoundError, BusinessError } from '../../utils/errors.js';
 import { successResponse, paginatedResponse } from '../../utils/response.js';
 import * as mt5Service from '../../services/mt5.service.js';
 import { awardDepositCommission } from '../../services/ibCommission.service.js';
+import emailService from '../../services/email.service.js';
 
 /**
  * Find or create a wallet for a user.
@@ -189,6 +190,11 @@ export const approveDeposit = async (req, res, next) => {
       console.warn(`[Deposit] Audit log failed (non-critical): ${auditErr.message}`);
     }
 
+    // Email: deposit approved
+    User.findByPk(deposit.userId, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendDepositConfirmationEmail(u.email, { amount: deposit.amount, accountLogin: account.mt5Login }).catch(() => {});
+    }).catch(() => {});
+
     res.json(successResponse(deposit, 'Deposit approved and credited to MT5 account'));
   } catch (error) {
     console.error(`[Deposit] Error approving deposit ${req.params.depositId}:`, error.message);
@@ -238,6 +244,11 @@ export const rejectDeposit = async (req, res, next) => {
     } catch (auditErr) {
       console.warn(`[Deposit] Audit log failed (non-critical): ${auditErr.message}`);
     }
+
+    // Email: deposit rejected
+    User.findByPk(deposit.userId, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendDepositRejectedEmail(u.email, u.firstName, { amount: deposit.amount, reason: rejectNote }).catch(() => {});
+    }).catch(() => {});
 
     res.json(successResponse(deposit, 'Deposit rejected'));
   } catch (error) {

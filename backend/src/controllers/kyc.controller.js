@@ -1,5 +1,6 @@
 import { KycDocument, User } from '../models/index.js';
 import { successResponse } from '../utils/response.js';
+import emailService from '../services/email.service.js';
 
 export const getKycStatus = async (req, res, next) => {
   try {
@@ -47,6 +48,11 @@ export const uploadKycDocuments = async (req, res, next) => {
 
     // Also update user kycStatus to pending
     await User.update({ kycStatus: 'pending' }, { where: { id: req.user.id } });
+
+    // Email: KYC submitted
+    User.findByPk(req.user.id, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendKycSubmissionEmail(u.email, u.firstName).catch(() => {});
+    }).catch(() => {});
 
     res.json(successResponse(kyc, 'KYC documents uploaded successfully'));
   } catch (error) {

@@ -2,6 +2,7 @@ import { Withdrawal, Mt5Account, AuditLog, User, Wallet, WalletTransaction } fro
 import { NotFoundError, BusinessError } from '../../utils/errors.js';
 import { successResponse, paginatedResponse } from '../../utils/response.js';
 import * as mt5Service from '../../services/mt5.service.js';
+import emailService from '../../services/email.service.js';
 
 const getOrCreateWallet = async (userId) => {
   let wallet = await Wallet.findOne({ where: { userId } });
@@ -163,6 +164,11 @@ export const approveWithdrawal = async (req, res, next) => {
       console.warn(`[Withdrawal] Audit log failed (non-critical): ${auditErr.message}`);
     }
 
+    // Email: withdrawal approved
+    User.findByPk(withdrawal.userId, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendWithdrawalConfirmationEmail(u.email, { amount: withdrawal.amount }).catch(() => {});
+    }).catch(() => {});
+
     res.json(successResponse(withdrawal, 'Withdrawal approved and debited from MT5 account'));
   } catch (error) {
     console.error(`[Withdrawal] Error approving withdrawal ${req.params.withdrawalId}:`, error.message);
@@ -213,6 +219,11 @@ export const rejectWithdrawal = async (req, res, next) => {
     } catch (auditErr) {
       console.warn(`[Withdrawal] Audit log failed (non-critical): ${auditErr.message}`);
     }
+
+    // Email: withdrawal rejected
+    User.findByPk(withdrawal.userId, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendWithdrawalRejectedEmail(u.email, rejectNote).catch(() => {});
+    }).catch(() => {});
 
     res.json(successResponse(withdrawal, 'Withdrawal rejected'));
   } catch (error) {

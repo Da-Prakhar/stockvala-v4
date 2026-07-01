@@ -75,6 +75,14 @@ export const verify2FA = async (req, res, next) => {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
 
+    // Email: login alert after 2FA success
+    emailService.sendLoginAlertEmail(user.email, {
+      firstName: user.firstName,
+      ip: req.ip || req.headers['x-forwarded-for'] || 'Unknown',
+      userAgent: req.get('user-agent') || 'Unknown',
+      time: new Date().toISOString()
+    }).catch(() => {});
+
     res.json(successResponse(
       { user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName }, accessToken, refreshToken },
       'Login successful'

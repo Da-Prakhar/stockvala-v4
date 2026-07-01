@@ -5,6 +5,7 @@ import mt5Service from '../services/mt5.service.js';
 import { setFollower, removeFollower } from '../redis/client.js';
 import { getPermissions } from '../utils/brokerPermissions.js';
 import axios from 'axios';
+import emailService from '../services/email.service.js';
 
 /**
  * Push follow/unfollow events to Gateway Manager so it can update its Redis
@@ -626,6 +627,15 @@ export const followMaster = async (req, res, next) => {
     const followerAcc = await Mt5Account.findByPk(followerAccId, { attributes: ['mt5Login'] });
     await syncToRedis(master.account?.mt5Login, followerAcc?.mt5Login, validated);
     notifyGateway('subscribe', master.account?.mt5Login, followerAcc?.mt5Login, validated);
+
+    // Email: copy trade follow
+    User.findByPk(req.user.id, { attributes: ['email', 'firstName'] }).then(u => {
+      if (u) emailService.sendCopyTradeFollowEmail(u.email, u.firstName, {
+        masterName: master.displayName || `Master #${masterId}`,
+        allocation: allocationAmount,
+        copyRatio: validated.copyRatio || 1
+      }).catch(() => {});
+    }).catch(() => {});
 
     res.status(201).json(successResponse(follower, 'Now following this master trader'));
   } catch (error) {

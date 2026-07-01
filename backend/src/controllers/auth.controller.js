@@ -154,6 +154,15 @@ export const login = async (req, res, next) => {
 
     // No 2FA — issue full tokens immediately
     const { accessToken, refreshToken } = await issueFullTokens(user, req);
+
+    // Email: login alert
+    emailService.sendLoginAlertEmail(user.email, {
+      firstName: user.firstName,
+      ip: req.ip || req.headers['x-forwarded-for'] || 'Unknown',
+      userAgent: req.get('user-agent') || 'Unknown',
+      time: new Date().toISOString()
+    }).catch(() => {});
+
     res.json(successResponse(
       { user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName }, accessToken, refreshToken },
       'Login successful'
