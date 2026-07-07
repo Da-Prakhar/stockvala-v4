@@ -32,6 +32,7 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import LegalPage from './pages/LegalPage'
 import AuthCallbackPage from './pages/AuthCallbackPage'
+import BonusPage from './pages/BonusPage'
 
 function App() {
   const { refreshAuth } = useAuthStore()
@@ -272,6 +273,15 @@ function App() {
           element={
             <DashboardLayout pageTitle="About Us">
               <CompanyPage />
+            </DashboardLayout>
+          }
+        />
+
+        <Route
+          path="/bonuses"
+          element={
+            <DashboardLayout pageTitle="Bonuses">
+              <BonusPage />
             </DashboardLayout>
           }
         />

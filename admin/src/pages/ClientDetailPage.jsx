@@ -13,6 +13,7 @@ function getKycDocUrl(v) {
   return `${kycApiBase}/${relativePath}`
 }
 
+import UserStatementTab from '../components/statement/UserStatementTab'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { StatusBadge } from '../components/ui/StatusBadge'
@@ -705,6 +706,17 @@ export default function ClientDetailPage() {
             <DataTable columns={withdrawalColumns} data={client.withdrawals || []} pageSize={10} />
           </div>
         </Card>
+      ),
+    },
+    {
+      label: 'Statement',
+      content: (
+        <UserStatementTab
+          client={client}
+          liveDeals={liveDeals}
+          liveAccounts={liveAccounts}
+          mt5Loading={mt5Loading}
+        />
       ),
     },
   ]

@@ -34,6 +34,8 @@ import BrokerSetting from './BrokerSetting.js';
 import Notification from './Notification.js';
 import AuditLog from './AuditLog.js';
 import FeeTransaction from './FeeTransaction.js';
+import Bonus from './Bonus.js';
+import UserBonus from './UserBonus.js';
 
 /**
  * Setup model associations
@@ -184,6 +186,12 @@ export const setupAssociations = () => {
   // ─── FeeTransaction ───
   FeeTransaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   User.hasMany(FeeTransaction, { foreignKey: 'userId', as: 'feeTransactions' });
+
+  // ─── Bonus ───
+  User.hasMany(UserBonus, { foreignKey: 'userId', as: 'bonuses' });
+  UserBonus.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+  Bonus.hasMany(UserBonus, { foreignKey: 'bonusId', as: 'claims' });
+  UserBonus.belongsTo(Bonus, { foreignKey: 'bonusId', as: 'bonus' });
 };
 
 // Setup associations
@@ -224,7 +232,9 @@ export {
   BrokerSetting,
   Notification,
   AuditLog,
-  FeeTransaction
+  FeeTransaction,
+  Bonus,
+  UserBonus
 };
 
 export default db;

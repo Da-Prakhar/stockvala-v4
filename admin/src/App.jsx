@@ -27,6 +27,7 @@ import ManagersPage from './pages/ManagersPage'
 import MT5ManagementPage from './pages/MT5ManagementPage'
 import RiskMonitorPage from './pages/RiskMonitorPage'
 import IBSettingsPage from './pages/IBSettingsPage'
+import BonusManagerPage from './pages/BonusManagerPage'
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth()
@@ -238,6 +239,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <IBSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/bonuses"
+          element={
+            <ProtectedRoute>
+              <BonusManagerPage />
             </ProtectedRoute>
           }
         />

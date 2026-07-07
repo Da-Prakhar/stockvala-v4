@@ -19,6 +19,7 @@ import {
   Server,
   Share2,
   Flame,
+  Gift,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompanyStore, getUploadUrl } from '../../store/companyStore'
@@ -78,6 +79,11 @@ const menuItems = [
     label: 'IB Program',
     icon: Share2,
     path: '/ib',
+  },
+  {
+    label: 'Bonus Manager',
+    icon: Gift,
+    path: '/bonuses',
   },
   {
     label: 'Roles & Permissions',

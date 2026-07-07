@@ -13,6 +13,7 @@ import {
   HelpCircle,
   Download,
   Share2,
+  Gift,
   LogOut,
   X,
   ChevronLeft,
@@ -39,6 +40,7 @@ const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
     { icon: HelpCircle, label: 'Support', href: '/support' },
     { icon: Download, label: 'Downloads', href: '/downloads' },
     { icon: Share2, label: 'IB', href: '/ib' },
+    { icon: Gift, label: 'Bonuses', href: '/bonuses' },
   ]
 
   const isActive = (href) => location.pathname.startsWith(href)

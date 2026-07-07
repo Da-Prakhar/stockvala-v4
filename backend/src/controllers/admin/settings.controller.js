@@ -138,7 +138,7 @@ export const getSettingsByCategory = async (req, res, next) => {
 
     // If category is 'company', also fetch keys that might be under 'branding' or 'general'
     if (category === 'company') {
-      const extraKeys = ['companyName', 'email', 'phone', 'address', 'facebook', 'twitter', 'linkedin', 'instagram', 'footerText', 'disclaimer', 'logoUrl', 'faviconUrl', 'platform_name'];
+      const extraKeys = ['companyName', 'email', 'phone', 'address', 'facebook', 'twitter', 'linkedin', 'instagram', 'footerText', 'disclaimer', 'logoUrl', 'faviconUrl', 'platform_name', 'LANDING_URL', 'whatsappNumber', 'telegramLink', 'whatsappMessage'];
       const existingKeys = rows.map(r => r.key);
       const neededKeys = extraKeys.filter(k => !existingKeys.includes(k));
       if (neededKeys.length > 0) {

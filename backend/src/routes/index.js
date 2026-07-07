@@ -16,6 +16,7 @@ import kycRoutes from './kyc.routes.js';
 import publicRoutes from './public.routes.js';
 import diagRoutes from './diag.routes.js';
 import internalRoutes from './internal.routes.js';
+import bonusRoutes from './bonus.routes.js';
 
 const router = express.Router();
 
@@ -42,6 +43,7 @@ router.use('/support', supportRoutes);
 router.use('/ib', ibRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/kyc', kycRoutes);
+router.use('/bonuses', bonusRoutes);
 
 /**
  * Admin routes

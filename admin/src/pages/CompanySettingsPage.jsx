@@ -31,6 +31,7 @@ export default function CompanySettingsPage() {
     disclaimer: 'Past performance is not indicative of future results...',
     logoUrl: '',
     faviconUrl: '',
+    LANDING_URL: '',
   }
 
   const defaultSmtp = {
@@ -76,6 +77,7 @@ export default function CompanySettingsPage() {
             disclaimer: s.disclaimer || prev.disclaimer,
             logoUrl: s.logoUrl || prev.logoUrl,
             faviconUrl: s.faviconUrl || prev.faviconUrl,
+            LANDING_URL: s.LANDING_URL || prev.LANDING_URL,
           }))
         }
       } catch (err) {
@@ -302,6 +304,14 @@ export default function CompanySettingsPage() {
             value={formData.address}
             onChange={(e) => handleChange('address', e.target.value)}
             fullWidth
+          />
+          <Input
+            label="Landing Page URL"
+            value={formData.LANDING_URL}
+            onChange={(e) => handleChange('LANDING_URL', e.target.value)}
+            fullWidth
+            placeholder="https://yourdomain.com"
+            hint="Used in password reset emails and referral links"
           />
         </div>
       </Card>

@@ -16,6 +16,7 @@ import pammRoutes from './pamm.routes.js';
 import adminsRoutes from './admins.routes.js';
 import ibRoutes from './ib.routes.js';
 import feeRoutes from './fee.routes.js';
+import bonusRoutes from './bonus.routes.js';
 
 const router = express.Router();
 
@@ -41,5 +42,6 @@ router.use('/mam', mamRoutes);
 router.use('/pamm', pammRoutes);
 router.use('/ib', ibRoutes);
 router.use('/fees', feeRoutes);
+router.use('/bonuses', bonusRoutes);
 
 export default router;
