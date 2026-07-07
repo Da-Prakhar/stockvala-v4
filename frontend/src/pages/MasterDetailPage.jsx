@@ -138,7 +138,7 @@ const MasterDetailPage = () => {
         const [masterRes, followingsRes, accountsRes] = await Promise.allSettled([
           api.get(`/copy-trading/masters/${id}`),
           api.get('/copy-trading/followings'),
-          api.get('/mt5/accounts'),
+          api.get('/accounts'),
         ])
         if (masterRes.status === 'fulfilled') setMaster(masterRes.value.data?.data)
         else setError('Failed to fetch master details')
