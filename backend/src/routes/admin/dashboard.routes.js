@@ -9,5 +9,6 @@ const router = express.Router();
 
 router.get('/stats', dashboardController.getDashboardStats);
 router.get('/charts', dashboardController.getDashboardCharts);
+router.get('/mt5-totals', dashboardController.getMt5Totals);
 
 export default router;

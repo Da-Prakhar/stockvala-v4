@@ -75,6 +75,26 @@ const UserProfile = db.define('UserProfile', {
     type: DataTypes.JSON,
     allowNull: true
   },
+  bankName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'bank_name'
+  },
+  accountNumber: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'bank_account_number'
+  },
+  ifscCode: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'bank_ifsc_code'
+  },
+  accountHolderName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'bank_account_holder_name'
+  },
   preferences: {
     type: DataTypes.JSON,
     defaultValue: {},

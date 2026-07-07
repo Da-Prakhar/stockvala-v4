@@ -150,9 +150,10 @@ export const useAccountStore = create((set, get) => ({
   /**
    * Generate new trading & investor passwords for an account
    */
-  changePassword: async (accountId) => {
+  changePassword: async (accountId, password = null) => {
     try {
-      const response = await api.post(`/accounts/${accountId}/change-password`)
+      const body = password ? { password } : {}
+      const response = await api.post(`/accounts/${accountId}/change-password`, body)
       const data = response.data?.data
       set((state) => ({
         accounts: state.accounts.map((acc) =>

@@ -76,6 +76,16 @@ const Mt5Account = db.define('Mt5Account', {
     allowNull: true,
     field: 'server_name'
   },
+  tradingPassword: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'trading_password'
+  },
+  investorPassword: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'investor_password'
+  },
   createdAt: {
     type: DataTypes.DATE
   },

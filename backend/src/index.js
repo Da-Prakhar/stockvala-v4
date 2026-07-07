@@ -395,6 +395,38 @@ const startServer = async () => {
         sql: `ALTER TABLE kyc_documents
                 ADD COLUMN back_image VARCHAR(255) NULL DEFAULT NULL`,
         name: 'kyc_documents.back_image'
+      },
+      // mt5_accounts — last-known MT5 credentials (set on create + "Set Password")
+      {
+        sql: `ALTER TABLE mt5_accounts
+                ADD COLUMN trading_password VARCHAR(255) NULL DEFAULT NULL`,
+        name: 'mt5_accounts.trading_password'
+      },
+      {
+        sql: `ALTER TABLE mt5_accounts
+                ADD COLUMN investor_password VARCHAR(255) NULL DEFAULT NULL`,
+        name: 'mt5_accounts.investor_password'
+      },
+      // user_profiles — bank details (withdrawal payout info)
+      {
+        sql: `ALTER TABLE user_profiles
+                ADD COLUMN bank_name VARCHAR(255) NULL DEFAULT NULL`,
+        name: 'user_profiles.bank_name'
+      },
+      {
+        sql: `ALTER TABLE user_profiles
+                ADD COLUMN bank_account_number VARCHAR(255) NULL DEFAULT NULL`,
+        name: 'user_profiles.bank_account_number'
+      },
+      {
+        sql: `ALTER TABLE user_profiles
+                ADD COLUMN bank_ifsc_code VARCHAR(255) NULL DEFAULT NULL`,
+        name: 'user_profiles.bank_ifsc_code'
+      },
+      {
+        sql: `ALTER TABLE user_profiles
+                ADD COLUMN bank_account_holder_name VARCHAR(255) NULL DEFAULT NULL`,
+        name: 'user_profiles.bank_account_holder_name'
       }
     ];
     for (const m of columnMigrations) {

@@ -27,6 +27,10 @@ const toUserJson = (user, profile = null) => {
     // profile fields (may come from UserProfile row)
     country: profile?.country ?? u.country ?? null,
     city: profile?.city ?? u.city ?? null,
+    bankName: profile?.bankName ?? null,
+    accountNumber: profile?.accountNumber ?? null,
+    ifscCode: profile?.ifscCode ?? null,
+    accountHolderName: profile?.accountHolderName ?? null,
   };
 };
 
@@ -49,11 +53,15 @@ export const getProfile = async (req, res, next) => {
 
 /**
  * PUT /users/profile
- * Accepts any combination of: firstName, lastName, phone, country, city, twoFactorEnabled
+ * Accepts any combination of: firstName, lastName, phone, country, city, twoFactorEnabled,
+ * bankName, accountNumber, ifscCode, accountHolderName
  */
 export const updateProfile = async (req, res, next) => {
   try {
-    const { firstName, lastName, phone, country, city, twoFactorEnabled } = req.validated.body;
+    const {
+      firstName, lastName, phone, country, city, twoFactorEnabled,
+      bankName, accountNumber, ifscCode, accountHolderName,
+    } = req.validated.body;
 
     const user = await User.findByPk(req.user.id);
     if (!user) throw new NotFoundError('User not found');
@@ -69,11 +77,17 @@ export const updateProfile = async (req, res, next) => {
       await user.update(userUpdates);
     }
 
-    // Update UserProfile for country / city
-    if (country !== undefined || city !== undefined) {
+    // Update UserProfile for country / city / bank details
+    if (country !== undefined || city !== undefined
+      || bankName !== undefined || accountNumber !== undefined
+      || ifscCode !== undefined || accountHolderName !== undefined) {
       const profileUpdates = {};
       if (country !== undefined) profileUpdates.country = country ? country.trim() : null;
       if (city    !== undefined) profileUpdates.city    = city    ? city.trim()    : null;
+      if (bankName          !== undefined) profileUpdates.bankName          = bankName          ? bankName.trim()          : null;
+      if (accountNumber     !== undefined) profileUpdates.accountNumber     = accountNumber     ? accountNumber.trim()     : null;
+      if (ifscCode          !== undefined) profileUpdates.ifscCode          = ifscCode          ? ifscCode.trim()          : null;
+      if (accountHolderName !== undefined) profileUpdates.accountHolderName = accountHolderName ? accountHolderName.trim() : null;
 
       await UserProfile.upsert({
         userId: user.id,

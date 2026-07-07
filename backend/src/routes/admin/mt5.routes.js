@@ -42,6 +42,8 @@ router.post('/leverage', mt5Controller.changeLeverage);
 
 // Password Change
 router.put('/accounts/:login/password', mt5Controller.changeAccountPassword);
+// Show last-known password (MT5 has no password-retrieval API — we remember what we set)
+router.get('/accounts/:login/password', mt5Controller.getAccountPassword);
 
 // Sync
 router.post('/sync/:userId', mt5Controller.syncUserAccounts);

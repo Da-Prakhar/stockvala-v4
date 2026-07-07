@@ -46,6 +46,11 @@ export default function ClientDetailPage() {
   const [newPassword, setNewPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [pwdLoading, setPwdLoading] = useState(false)
+  // Show stored MT5 password state
+  const [showPwdModal, setShowPwdModal] = useState({ isOpen: false, login: null })
+  const [storedPasswords, setStoredPasswords] = useState(null) // { tradingPassword, investorPassword }
+  const [showPwdLoading, setShowPwdLoading] = useState(false)
+  const [revealedPasswords, setRevealedPasswords] = useState({})
   // CRM password reset state
   const [crmPwdModal, setCrmPwdModal] = useState(false)
   const [crmNewPassword, setCrmNewPassword] = useState('')
@@ -175,6 +180,23 @@ export default function ClientDetailPage() {
       toast.error(err.response?.data?.message || 'Failed to change password')
     } finally {
       setPwdLoading(false)
+    }
+  }
+
+  const handleShowPassword = async (login) => {
+    setShowPwdModal({ isOpen: true, login })
+    setStoredPasswords(null)
+    setRevealedPasswords({})
+    setShowPwdLoading(true)
+    try {
+      const res = await api.get(`/admin/mt5/accounts/${login}/password`)
+      const data = res.data?.data || res.data
+      setStoredPasswords(data)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to fetch stored password')
+      setStoredPasswords({ tradingPassword: null, investorPassword: null })
+    } finally {
+      setShowPwdLoading(false)
     }
   }
 
@@ -633,6 +655,9 @@ export default function ClientDetailPage() {
                   <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setPwdModal({ isOpen: true, login: account.login, type: 'investor' }); setNewPassword(''); setShowPassword(false); }}>
                     Change Investor Password
                   </Button>
+                  <Button size="sm" variant="secondary" icon={Key} onClick={() => handleShowPassword(account.login)}>
+                    Show Password
+                  </Button>
                 </div>
               </Card>
             )
@@ -866,10 +891,64 @@ export default function ClientDetailPage() {
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            fullWidth
+            onClick={() => { const p = generateRandomPassword(); setNewPassword(p); setShowPassword(true); }}
+          >
+            Generate Random Password
+          </Button>
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => { setPwdModal({ isOpen: false, login: null, type: 'trader' }); setNewPassword(''); }}>Cancel</Button>
             <Button variant="primary" className="flex-1" onClick={handleChangePassword} isLoading={pwdLoading}>Change Password</Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Show Stored MT5 Password Modal */}
+      <Modal
+        isOpen={showPwdModal.isOpen}
+        onClose={() => { setShowPwdModal({ isOpen: false, login: null }); setStoredPasswords(null); setRevealedPasswords({}); }}
+        title={`Stored Passwords — Account ${showPwdModal.login}`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-dark-600 dark:text-dark-400">
+            MT5 has no password-retrieval API — these are the last passwords our system set for this account. If a password was never set through this platform, it will show as unavailable.
+          </p>
+          {showPwdLoading ? (
+            <div className="flex items-center justify-center py-6"><Loader /></div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                { key: 'tradingPassword', label: 'Trading Password' },
+                { key: 'investorPassword', label: 'Investor Password' },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dark-200 dark:border-dark-700">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-dark-500 dark:text-dark-400 mb-0.5">{label}</p>
+                    {storedPasswords?.[key] ? (
+                      <p className="font-mono text-sm font-semibold text-dark-900 dark:text-dark-50 tracking-wider truncate">
+                        {revealedPasswords[key] ? storedPasswords[key] : '••••••••••'}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-dark-400 dark:text-dark-500">Not available — password was never captured by this system.</p>
+                    )}
+                  </div>
+                  {storedPasswords?.[key] && (
+                    <button
+                      type="button"
+                      onClick={() => setRevealedPasswords(prev => ({ ...prev, [key]: !prev[key] }))}
+                      className="p-1.5 hover:bg-dark-100 dark:hover:bg-dark-700 rounded-lg transition-colors flex-shrink-0"
+                    >
+                      {revealedPasswords[key] ? <EyeOff className="w-4 h-4 text-dark-500" /> : <Eye className="w-4 h-4 text-dark-500" />}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <Button variant="secondary" className="w-full" onClick={() => { setShowPwdModal({ isOpen: false, login: null }); setStoredPasswords(null); setRevealedPasswords({}); }}>Close</Button>
         </div>
       </Modal>
     </motion.div>

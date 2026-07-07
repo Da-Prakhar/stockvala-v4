@@ -478,6 +478,10 @@ export default function MT5ManagementPage() {
   // Balance operation form
   const [balanceOp, setBalanceOp] = useState({ type: 'deposit', amount: '', comment: '' })
 
+  // Credentials shown right after an admin account creation
+  const [createdCredentials, setCreatedCredentials] = useState(null) // { login, tradingPassword, investorPassword }
+  const [showCreatedPwd, setShowCreatedPwd] = useState(false)
+
   useEffect(() => {
     loadMT5Data()
   }, [])
@@ -556,8 +560,15 @@ export default function MT5ManagementPage() {
     try {
       const res = await api.post('/admin/mt5/accounts', createForm)
       const data = res.data?.data || res.data
-      toast.success(`MT5 Account created! Login: ${data.login}`)
+      const login = data.account?.mt5Login || data.login
+      toast.success(`MT5 Account created! Login: ${login}`)
       setShowCreateModal(false)
+      setCreatedCredentials({
+        login,
+        tradingPassword: data.tradingPassword || null,
+        investorPassword: data.investorPassword || null,
+      })
+      setShowCreatedPwd(false)
       setCreateForm({
         firstName: '', lastName: '', email: '', phone: '',
         password: '', group: '', leverage: 100, initialBalance: 0,
@@ -1017,6 +1028,45 @@ export default function MT5ManagementPage() {
               {actionLoading ? 'Creating...' : 'Create Account'}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Created Account Credentials Modal */}
+      <Modal
+        isOpen={!!createdCredentials}
+        onClose={() => { setCreatedCredentials(null); setShowCreatedPwd(false) }}
+        title={`Account Created — Login ${createdCredentials?.login || ''}`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-dark-600 dark:text-dark-400">
+            Save these credentials now — MT5 has no password-retrieval API, so this may be the only time they're shown here (they can still be viewed later via "Show Password" on the client's account).
+          </p>
+          <div className="space-y-3">
+            {[
+              { key: 'tradingPassword', label: 'Trading Password', value: createdCredentials?.tradingPassword },
+              { key: 'investorPassword', label: 'Investor Password', value: createdCredentials?.investorPassword },
+            ].filter(row => row.value).map(row => (
+              <div key={row.key} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dark-200 dark:border-dark-700">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-dark-500 dark:text-dark-400 mb-0.5">{row.label}</p>
+                  <p className="font-mono text-sm font-semibold text-dark-900 dark:text-dark-50 tracking-wider truncate">
+                    {showCreatedPwd ? row.value : '••••••••••'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreatedPwd(!showCreatedPwd)}
+                  className="p-1.5 hover:bg-dark-100 dark:hover:bg-dark-700 rounded-lg transition-colors flex-shrink-0"
+                >
+                  {showCreatedPwd ? <EyeOff className="w-4 h-4 text-dark-500" /> : <Eye className="w-4 h-4 text-dark-500" />}
+                </button>
+              </div>
+            ))}
+            {!createdCredentials?.tradingPassword && !createdCredentials?.investorPassword && (
+              <p className="text-sm text-dark-400 dark:text-dark-500">No passwords were returned by the MT5 bridge for this account.</p>
+            )}
+          </div>
+          <Button variant="secondary" className="w-full" onClick={() => { setCreatedCredentials(null); setShowCreatedPwd(false) }}>Close</Button>
         </div>
       </Modal>
     </motion.div>

@@ -126,47 +126,12 @@ export default function AdminDashboardPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
-  // Fetch live MT5 balances for all accounts
   const fetchLiveMT5Totals = useCallback(async () => {
     try {
-      // Get all MT5 accounts from clients endpoint
-      const clientsRes = await api.get('/admin/clients?limit=500')
-      const clients = clientsRes.data?.data || []
-      const allLogins = []
-      clients.forEach(c => {
-        (c.mt5Logins || []).forEach(login => allLogins.push(login))
-      })
-
-      if (!allLogins.length) {
-        setLiveMT5Balance({ totalBalance: 0, totalEquity: 0, count: 0 })
-        return
-      }
-
-      let totalBalance = 0
-      let totalEquity = 0
-      let count = 0
-
-      // Fetch in parallel batches
-      const batchSize = 10
-      for (let i = 0; i < allLogins.length; i += batchSize) {
-        const batch = allLogins.slice(i, i + batchSize)
-        const results = await Promise.allSettled(
-          batch.map(login =>
-            api.get(`/admin/mt5/accounts/${login}`).then(r => r.data?.data || r.data)
-          )
-        )
-        results.forEach(r => {
-          if (r.status === 'fulfilled' && r.value) {
-            totalBalance += parseFloat(r.value.balance) || 0
-            totalEquity += parseFloat(r.value.equity) || 0
-            count++
-          }
-        })
-      }
-
-      setLiveMT5Balance({ totalBalance, totalEquity, count })
+      const res = await api.get('/admin/dashboard/mt5-totals')
+      setLiveMT5Balance(res.data?.data || { totalBalance: 0, totalEquity: 0, count: 0 })
     } catch (err) {
-      console.error('Error fetching live MT5 totals:', err)
+      console.error('Error fetching MT5 totals:', err)
     }
   }, [])
 

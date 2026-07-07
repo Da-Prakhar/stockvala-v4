@@ -736,6 +736,49 @@ export const sendCopyTradeFollowEmail = async (email, firstName, tradeData) => {
   return sendEmail(email, subject, text, html);
 };
 
+export const sendMt5CredentialsEmail = async (email, { mt5Login, tradingPassword, investorPassword, serverName, accountType } = {}) => {
+  const company = await getCompany();
+  const subject = `Your MT5 Account Credentials — ${company.name}`;
+  const text = `Your ${accountType || 'trading'} MT5 account is ready. Login: ${mt5Login}. Server: ${serverName || company.name}.${tradingPassword ? ` Trading password: ${tradingPassword}.` : ''}${investorPassword ? ` Investor password: ${investorPassword}.` : ''} Please keep these credentials secure.`;
+
+  const html = baseLayout(company, `
+    <div style="text-align:center;">
+      <div class="icon-circle" style="background:rgba(59,130,246,0.15);">🔑</div>
+      <h2>Your MT5 Account is Ready!</h2>
+      <p>Here are the login details for your new ${(accountType || 'trading').replace('_', ' ')} account. Use these credentials in the MetaTrader 5 app.</p>
+    </div>
+    <div style="text-align:center;margin:20px 0;">
+      <div style="display:inline-block;background:#ffffff;border:2px solid #3b82f6;border-radius:16px;padding:16px 32px;">
+        <p style="margin:0 0 4px;color:#64748b;font-size:12px;letter-spacing:1px;text-transform:uppercase;">MT5 Login</p>
+        <span style="font-size:28px;font-weight:800;color:#1e293b;letter-spacing:2px;font-family:monospace;">${mt5Login}</span>
+      </div>
+    </div>
+    <div class="info-box">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Server</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;">${serverName || company.name}</span></td>
+        </tr>
+        ${tradingPassword ? `<tr>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;"><span style="color:#64748b;font-size:13px;">Trading Password</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #334155;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;font-family:monospace;">${tradingPassword}</span></td>
+        </tr>` : ''}
+        ${investorPassword ? `<tr>
+          <td style="padding:8px 0;"><span style="color:#64748b;font-size:13px;">Investor Password</span></td>
+          <td style="padding:8px 0;text-align:right;"><span style="color:#e2e8f0;font-size:13px;font-weight:600;font-family:monospace;">${investorPassword}</span></td>
+        </tr>` : ''}
+      </table>
+    </div>
+    <div class="divider"></div>
+    <p style="color:#64748b;font-size:13px;text-align:center;">Keep these credentials safe — never share them with anyone. You can change your password anytime from your account dashboard.</p>
+    <div style="text-align:center;margin-top:24px;">
+      <a href="${company.website}/accounts" class="btn">View My Accounts →</a>
+    </div>
+  `, `Your MT5 account (login ${mt5Login}) is ready.`);
+
+  return sendEmail(email, subject, text, html);
+};
+
 export default {
   sendWelcomeEmail,
   sendPasswordResetEmail,
@@ -754,4 +797,5 @@ export default {
   sendSupportTicketNotificationEmail,
   sendLoginAlertEmail,
   sendGenericEmail,
+  sendMt5CredentialsEmail,
 };

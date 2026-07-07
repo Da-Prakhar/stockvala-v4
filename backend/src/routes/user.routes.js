@@ -18,6 +18,10 @@ const updateProfileSchema = Joi.object({
     country:           Joi.string().allow('', null).optional(),
     city:              Joi.string().allow('', null).optional(),
     twoFactorEnabled:  Joi.boolean().optional(),
+    bankName:          Joi.string().allow('', null).optional(),
+    accountNumber:     Joi.string().allow('', null).optional(),
+    ifscCode:          Joi.string().allow('', null).optional(),
+    accountHolderName: Joi.string().allow('', null).optional(),
   }).min(1),   // at least one field required
 });
 

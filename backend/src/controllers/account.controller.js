@@ -5,6 +5,7 @@ import { getPermissions } from '../utils/brokerPermissions.js';
 import { successResponse, paginatedResponse } from '../utils/response.js';
 import * as mt5Service from '../services/mt5.service.js';
 import { redis, getPriceByServer } from '../redis/client.js';
+import { sendMt5CredentialsEmail } from '../services/email.service.js';
 
 /**
  * Return the correct contract size for a symbol.
@@ -181,6 +182,17 @@ export const createAccount = async (req, res, next) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Guard against duplicate accounts of the same type/market ─────────────
+    const existingAccount = await Mt5Account.findOne({
+      where: { userId: req.user.id, accountType, market: market || 'forex_crypto' }
+    });
+    if (existingAccount) {
+      throw new BusinessError(
+        `You already have a ${accountType} account for ${market || 'this market'} (Login: ${existingAccount.mt5Login}). Contact support if you need another account.`
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // For copy_trading, validate the master exists
     let masterRecord = null;
     if (accountType === 'copy_trading') {
@@ -268,6 +280,7 @@ export const createAccount = async (req, res, next) => {
     //   3. Returns { data: { investor_password: "..." } }
     // Account creation goes through the C# Gateway which returns no investor
     // password, so we MUST call enableAccount to get one.
+    let investorPasswordPending = false;
     try {
       const enableResult = await mt5Service.enableAccount(mt5Result.login);
       console.log(`[CreateAccount] Rights confirmed (login=${mt5Result.login})`);
@@ -276,13 +289,24 @@ export const createAccount = async (req, res, next) => {
       if (invPw) {
         mt5Result.investor_password = invPw;
         console.log(`[CreateAccount] Investor password captured for login=${mt5Result.login}`);
+      } else {
+        investorPasswordPending = true;
       }
     } catch (rightsErr) {
       // Non-critical — trading will work once the bridge is reachable
       console.warn(`[CreateAccount] Could not set rights/investor-pw (non-critical): ${rightsErr.message}`);
+      investorPasswordPending = true;
     }
 
-    // Save account to database
+    // Different bridge versions return passwords under different keys:
+    //   Python bridge:  { password, ... }          (older/v1 style)
+    //   Newer bridges:  { trading_password, investor_password, ... }
+    const tradingPw  = mt5Result.trading_password  || mt5Result.password        || mt5Result.trader_password  || null;
+    const investorPw = mt5Result.investor_password || mt5Result.investor_pass    || mt5Result.read_password    || null;
+    if (investorPw) investorPasswordPending = false;
+
+    // Save account to database (also remember the passwords we just set, since
+    // MT5 itself has no password-retrieval API — this is our only record of them)
     const account = await Mt5Account.create({
       userId: req.user.id,
       mt5Login: mt5Result.login,
@@ -295,6 +319,8 @@ export const createAccount = async (req, res, next) => {
       equity: initialBalance,
       status: 'active',
       serverName: serverDisplayName,
+      tradingPassword: tradingPw,
+      investorPassword: investorPw,
     });
 
     console.log('[CreateAccount] Account saved to DB, id:', account.id);
@@ -312,11 +338,20 @@ export const createAccount = async (req, res, next) => {
       });
     }
 
-    // Different bridge versions return passwords under different keys:
-    //   Python bridge:  { password, ... }          (older/v1 style)
-    //   Newer bridges:  { trading_password, investor_password, ... }
-    const tradingPw  = mt5Result.trading_password  || mt5Result.password        || mt5Result.trader_password  || null;
-    const investorPw = mt5Result.investor_password || mt5Result.investor_pass    || mt5Result.read_password    || null;
+    // Email the client their MT5 credentials — best-effort, never blocks the response
+    try {
+      if (user.email) {
+        await sendMt5CredentialsEmail(user.email, {
+          mt5Login: mt5Result.login,
+          tradingPassword: tradingPw,
+          investorPassword: investorPw,
+          serverName: serverDisplayName,
+          accountType,
+        });
+      }
+    } catch (emailErr) {
+      console.error('[CreateAccount] Failed to send MT5 credentials email (non-critical):', emailErr.message);
+    }
 
     res.status(201).json(successResponse({
       ...account.toJSON(),
@@ -324,6 +359,7 @@ export const createAccount = async (req, res, next) => {
       investorPassword: investorPw,
       serverName: serverDisplayName,
       server: serverDisplayName,
+      ...(investorPasswordPending ? { investorPasswordPending: true } : {}),
     }, `${accountType.replace('_', ' ')} account created successfully`));
   } catch (error) {
     console.error('[CreateAccount] ERROR:', error.message, error.stack);
@@ -555,20 +591,60 @@ export const syncAccount = async (req, res, next) => {
 /**
  * Set/change trading password for an MT5 account (user-facing)
  * POST /accounts/:id/change-password
- * Body: { password: string, type?: 'trader' | 'investor' }
+ * Body (all optional): { password, type }
+ * If password is omitted, a strong random one is generated.
  */
 export const changePassword = async (req, res, next) => {
   try {
     const account = await Mt5Account.findOne({ where: { id: req.params.id, userId: req.user.id } });
     if (!account) throw new NotFoundError('Account not found');
 
-    const { password, type = 'trader' } = req.body;
-    if (!password || password.length < 8) {
+    const { type = 'trader' } = req.body || {};
+    let { password } = req.body || {};
+
+    if (!password) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+      const specials = '@#$!';
+      password = '';
+      for (let i = 0; i < 10; i++) password += chars[Math.floor(Math.random() * chars.length)];
+      password += specials[Math.floor(Math.random() * specials.length)];
+      password += Math.floor(Math.random() * 10);
+    } else if (password.length < 8) {
       return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
     }
 
     await mt5Service.changePassword(account.mt5Login, password, type);
-    res.json(successResponse(null, `${type === 'investor' ? 'Investor' : 'Trading'} password updated for account ${account.mt5Login}`));
+
+    // Remember the password we just set — MT5 has no password-retrieval API,
+    // so this is our only record of it (used by the admin "Show Password" feature).
+    if (type === 'investor') {
+      await account.update({ investorPassword: password });
+    } else {
+      await account.update({ tradingPassword: password });
+    }
+
+    const responseData = { tradingPassword: password };
+
+    if (type === 'trader') {
+      try {
+        const chars2 = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        const specials2 = '@#$!';
+        let invPw = '';
+        for (let i = 0; i < 10; i++) invPw += chars2[Math.floor(Math.random() * chars2.length)];
+        invPw += specials2[Math.floor(Math.random() * specials2.length)];
+        invPw += Math.floor(Math.random() * 10);
+        await mt5Service.changePassword(account.mt5Login, invPw, 'investor');
+        await account.update({ investorPassword: invPw });
+        responseData.investorPassword = invPw;
+        responseData.investorPasswordUpdated = true;
+      } catch (invErr) {
+        console.warn(`[ChangePassword] Investor password change failed (non-critical): ${invErr.message}`);
+        responseData.investorPasswordUpdated = false;
+        responseData.warning = `Trading password was updated, but the investor password could not be changed (${invErr.message}). Contact support if you need it updated.`;
+      }
+    }
+
+    res.json(successResponse(responseData, `${type === 'investor' ? 'Investor' : 'Trading'} password updated for account ${account.mt5Login}`));
   } catch (error) {
     next(error);
   }

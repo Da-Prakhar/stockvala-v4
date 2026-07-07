@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCompanyStore, getUploadUrl } from '../store/companyStore'
+import { useAuthStore } from '../store/authStore'
 import { Eye, EyeOff, ChevronRight, ChevronLeft, Check, Mail, Lock, Phone, Globe, KeyRound } from 'lucide-react'
 import api from '../utils/api'
 
@@ -47,6 +48,8 @@ function ProgressBar({ step }) {
 export default function RegisterPage() {
   const { companyName, logoUrl, isLoaded } = useCompanyStore()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { setUser, setTokens } = useAuthStore()
 
   const [step, setStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
@@ -68,6 +71,11 @@ export default function RegisterPage() {
   })
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
+
+  useEffect(() => {
+    const ref = searchParams.get('ref')
+    if (ref) set('referralCode', ref.toUpperCase())
+  }, [])
 
   const validateStep1 = () => {
     if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
@@ -103,7 +111,7 @@ export default function RegisterPage() {
     if (!form.acceptTerms) { setError('You must accept the Terms & Conditions to continue'); return }
     setIsLoading(true)
     try {
-      await api.post('/auth/register', {
+      const response = await api.post('/auth/register', {
         email: form.email,
         password: form.password,
         firstName: form.firstName,
@@ -112,7 +120,18 @@ export default function RegisterPage() {
         country: form.country,
         referralCode: form.referralCode || undefined,
       })
-      navigate('/login', { state: { registered: true } })
+      const resData = response.data?.data || response.data
+      const { user, accessToken, refreshToken } = resData || {}
+
+      if (accessToken) {
+        // Auto-login — backend already issued tokens on register, no need to
+        // send the user back through the login form
+        setTokens(accessToken, refreshToken)
+        setUser(user)
+        navigate('/dashboard', { replace: true })
+      } else {
+        navigate('/login', { state: { registered: true } })
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.')
     } finally {

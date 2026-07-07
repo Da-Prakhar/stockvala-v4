@@ -197,7 +197,12 @@ export const createMT5Account = async (req, res, next) => {
 
     const serverDisplayName = await getServerDisplayName();
 
-    // Save to local database
+    // Different bridge versions return passwords under different keys
+    const tradingPw  = mt5Result.trading_password  || mt5Result.password        || mt5Result.trader_password  || null;
+    const investorPw = mt5Result.investor_password || mt5Result.investor_pass    || mt5Result.read_password    || null;
+
+    // Save to local database (also remember the passwords — MT5 has no
+    // password-retrieval API, so this is our only record of them)
     const account = await Mt5Account.create({
       userId: user.id,
       mt5Login: mt5Result.login,
@@ -207,13 +212,15 @@ export const createMT5Account = async (req, res, next) => {
       balance: 0,
       equity: 0,
       status: 'active',
-      serverName: serverDisplayName
+      serverName: serverDisplayName,
+      tradingPassword: tradingPw,
+      investorPassword: investorPw,
     });
 
     res.status(201).json(successResponse({
       account: account.toJSON(),
-      tradingPassword: mt5Result.trading_password,
-      investorPassword: mt5Result.investor_password
+      tradingPassword: tradingPw,
+      investorPassword: investorPw
     }, 'MT5 account created'));
   } catch (error) {
     next(error);
@@ -481,7 +488,41 @@ export const changeAccountPassword = async (req, res, next) => {
 
     // Call the bridge — it uses /users/:login/password
     const result = await withTimeout(mt5Service.changePassword(login, password, type || 'trader'), 9000);
+
+    // Remember the password we just set — MT5 has no password-retrieval API,
+    // so this is our only record of it (used by the admin "Show Password" feature).
+    const account = await Mt5Account.findOne({ where: { mt5Login: String(login) } });
+    if (account) {
+      if (type === 'investor') {
+        await account.update({ investorPassword: password });
+      } else {
+        await account.update({ tradingPassword: password });
+      }
+    }
+
     res.json(successResponse(result, `${type === 'investor' ? 'Investor' : 'Trader'} password changed for account ${login}`));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get the last known MT5 password(s) for an account, as remembered by our system.
+ * MT5's bridge API has no password-retrieval endpoint — passwords can only be
+ * set, never read back — so this returns whatever we captured/stored ourselves
+ * the last time a password was set (on creation or via change-password).
+ * GET /admin/mt5/accounts/:login/password
+ */
+export const getAccountPassword = async (req, res, next) => {
+  try {
+    const { login } = req.params;
+    const account = await Mt5Account.findOne({ where: { mt5Login: String(login) } });
+    if (!account) throw new NotFoundError('Account not found');
+
+    res.json(successResponse({
+      tradingPassword: account.tradingPassword || null,
+      investorPassword: account.investorPassword || null,
+    }, 'Stored MT5 passwords retrieved'));
   } catch (error) {
     next(error);
   }
@@ -850,6 +891,7 @@ export default {
   getIBHierarchy,
   changeLeverage,
   changeAccountPassword,
+  getAccountPassword,
   closePosition,
   syncUserAccounts,
   testConnection,

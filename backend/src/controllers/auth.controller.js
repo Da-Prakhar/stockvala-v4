@@ -10,16 +10,24 @@ import { awardReferralBonus } from '../services/ibCommission.service.js';
 
 /**
  * Resolve the landing page base URL.
- * Priority: broker_settings.LANDING_URL → env LANDING_URL → fallback
+ * Priority: broker_settings.LANDING_URL → env LANDING_URL → derive from req origin
  */
-async function getLandingUrl() {
+async function getLandingUrl(req) {
   try {
     const { default: BrokerSetting } = await import('../models/BrokerSetting.js');
     const s = await BrokerSetting.findOne({ where: { key: 'LANDING_URL' } });
     if (s?.value) return s.value.replace(/\/$/, '');
   } catch (_) {}
   if (process.env.LANDING_URL) return process.env.LANDING_URL.replace(/\/$/, '');
-  return 'https://starwavemarket.com';
+  if (req) {
+    const raw = req.get('origin') || req.get('referer') || `${req.protocol}://${req.get('host')}`;
+    try {
+      const parsed = new URL(raw);
+      const host = parsed.host.replace(/^(user|app|broker|crm|platform)\./i, '');
+      return `${parsed.protocol}//${host}`;
+    } catch { /* ignore */ }
+  }
+  return '';
 }
 
 /**
@@ -260,7 +268,7 @@ export const forgotPassword = async (req, res, next) => {
       });
 
       // Build reset URL — uses landing page which has a ResetPasswordPage
-      const landingUrl = await getLandingUrl();
+      const landingUrl = await getLandingUrl(req);
       const resetUrl = `${landingUrl}/reset-password?token=${resetToken}`;
 
       try {

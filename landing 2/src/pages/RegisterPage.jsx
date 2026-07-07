@@ -337,19 +337,21 @@ export default function RegisterPage() {
                 />
                 <span className="text-sm text-gray-600 dark:text-gray-300">
                   I agree to the{' '}
-                  <a
-                    href="#"
+                  <Link
+                    to="/legal/terms"
+                    target="_blank"
                     className="text-primary-400 hover:text-primary-300 font-medium"
                   >
                     Terms of Service
-                  </a>
+                  </Link>
                   {' '}and{' '}
-                  <a
-                    href="#"
+                  <Link
+                    to="/legal/privacy"
+                    target="_blank"
                     className="text-primary-400 hover:text-primary-300 font-medium"
                   >
                     Privacy Policy
-                  </a>
+                  </Link>
                 </span>
               </label>
               {errors.terms && (

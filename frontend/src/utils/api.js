@@ -18,6 +18,14 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // The instance default Content-Type is 'application/json'. Axios only
+    // auto-detects FormData and lets the browser set the multipart boundary
+    // when no Content-Type is already present — otherwise it silently
+    // JSON-stringifies the FormData (dropping any attached files). Strip the
+    // default here so uploads (KYC docs, deposit proofs, etc.) work.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     return config
   },
   (error) => {

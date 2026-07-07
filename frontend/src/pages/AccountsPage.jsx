@@ -14,6 +14,7 @@ import {
   Search,
   KeyRound,
   RotateCcw,
+  Lock,
 } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card, { CardBody, CardFooter } from '../components/ui/Card'
@@ -79,24 +80,61 @@ const AccountsPage = () => {
   const [syncingId, setSyncingId] = useState(null)
   const [syncAllLoading, setSyncAllLoading] = useState(false)
   const [visiblePasswords, setVisiblePasswords] = useState({})
-  const [changingPasswordId, setChangingPasswordId] = useState(null)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordModalAccount, setPasswordModalAccount] = useState(null)
+  const [newMt5Password, setNewMt5Password] = useState('')
+  const [confirmMt5Password, setConfirmMt5Password] = useState('')
+  const [showNewPw, setShowNewPw] = useState(false)
+  const [showConfirmPw, setShowConfirmPw] = useState(false)
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false)
 
   const togglePassword = (e, accountId) => {
     e.stopPropagation()
     setVisiblePasswords((prev) => ({ ...prev, [accountId]: !prev[accountId] }))
   }
 
-  const handleChangePassword = async (e, accountId) => {
+  const openPasswordModal = (e, account) => {
     e.stopPropagation()
-    setChangingPasswordId(accountId)
-    const result = await changePassword(accountId)
+    setPasswordModalAccount(account)
+    setNewMt5Password('')
+    setConfirmMt5Password('')
+    setShowNewPw(false)
+    setShowConfirmPw(false)
+    setShowPasswordModal(true)
+  }
+
+  const handlePasswordSubmit = async () => {
+    if (newMt5Password.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    if (newMt5Password !== confirmMt5Password) {
+      toast.error('Passwords do not match')
+      return
+    }
+    setPasswordSubmitting(true)
+    const result = await changePassword(passwordModalAccount.id, newMt5Password)
+    setPasswordSubmitting(false)
     if (result.success) {
-      toast.success('New passwords generated!')
-      setVisiblePasswords((prev) => ({ ...prev, [accountId]: true }))
+      toast.success('MT5 password updated!')
+      setVisiblePasswords((prev) => ({ ...prev, [passwordModalAccount.id]: true }))
+      setShowPasswordModal(false)
     } else {
       toast.error(result.error || 'Failed to change password')
     }
-    setChangingPasswordId(null)
+  }
+
+  const handleAutoGenerate = async () => {
+    setPasswordSubmitting(true)
+    const result = await changePassword(passwordModalAccount.id, null)
+    setPasswordSubmitting(false)
+    if (result.success) {
+      toast.success('New passwords auto-generated!')
+      setVisiblePasswords((prev) => ({ ...prev, [passwordModalAccount.id]: true }))
+      setShowPasswordModal(false)
+    } else {
+      toast.error(result.error || 'Failed to change password')
+    }
   }
 
   useEffect(() => {
@@ -321,13 +359,12 @@ const AccountsPage = () => {
                         <p className="text-xs text-slate-500 dark:text-slate-400">Trading Password</p>
                       </div>
                       <button
-                        onClick={(e) => handleChangePassword(e, account.id)}
-                        disabled={changingPasswordId === account.id}
-                        className="flex items-center gap-1 text-xs text-primary-500 hover:text-primary-400 disabled:opacity-50 transition-colors"
-                        title="Generate new password"
+                        onClick={(e) => openPasswordModal(e, account)}
+                        className="flex items-center gap-1 text-xs text-primary-500 hover:text-primary-400 transition-colors"
+                        title="Change MT5 password"
                       >
-                        <RotateCcw className={`h-3 w-3 ${changingPasswordId === account.id ? 'animate-spin' : ''}`} />
-                        {changingPasswordId === account.id ? 'Changing...' : (account.tradingPassword ? 'Change' : 'Set Password')}
+                        <KeyRound className="h-3 w-3" />
+                        {account.tradingPassword ? 'Change' : 'Set Password'}
                       </button>
                     </div>
                     <div className="flex items-center gap-2">
@@ -561,6 +598,97 @@ const AccountsPage = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* MT5 Password Change Modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        title="Change MT5 Password"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Set a new trading password for account{' '}
+            <span className="font-semibold font-mono text-slate-700 dark:text-slate-200">
+              {passwordModalAccount?.mt5Login}
+            </span>
+            . Leave blank and click <strong>Auto-generate</strong> for a strong random password.
+          </p>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+              New Password
+            </label>
+            <div className="relative">
+              <input
+                type={showNewPw ? 'text' : 'password'}
+                value={newMt5Password}
+                onChange={(e) => setNewMt5Password(e.target.value)}
+                placeholder="Min. 8 characters"
+                className="w-full px-3 py-2 pr-10 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPw((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          {newMt5Password.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPw ? 'text' : 'password'}
+                  value={confirmMt5Password}
+                  onChange={(e) => setConfirmMt5Password(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full px-3 py-2 pr-10 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPw((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showConfirmPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {confirmMt5Password && newMt5Password !== confirmMt5Password && (
+                <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+              )}
+              {confirmMt5Password && newMt5Password === confirmMt5Password && (
+                <p className="text-xs text-green-500 mt-1">Passwords match ✓</p>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="secondary"
+              onClick={handleAutoGenerate}
+              disabled={passwordSubmitting}
+              className="flex-1"
+            >
+              <RotateCcw className={`h-3.5 w-3.5 mr-1.5 ${passwordSubmitting ? 'animate-spin' : ''}`} />
+              Auto-generate
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handlePasswordSubmit}
+              disabled={passwordSubmitting || !newMt5Password || newMt5Password !== confirmMt5Password}
+              className="flex-1"
+            >
+              <Lock className="h-3.5 w-3.5 mr-1.5" />
+              Set Password
+            </Button>
+          </div>
+        </div>
       </Modal>
     </motion.div>
   )

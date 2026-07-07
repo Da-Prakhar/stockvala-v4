@@ -1,19 +1,20 @@
 import { User, Deposit, Withdrawal, Mt5Account, Trade } from '../../models/index.js';
 import { successResponse } from '../../utils/response.js';
 import { Sequelize } from 'sequelize';
-import db from '../../config/database.js';
 
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const stats = {
-      totalUsers: await User.count(),
-      totalAccounts: await Mt5Account.count(),
-      totalDeposits: await Deposit.sum('amount') || 0,
-      totalWithdrawals: await Withdrawal.sum('amount') || 0,
-      pendingDeposits: await Deposit.count({ where: { status: 'pending' } }),
-      pendingWithdrawals: await Withdrawal.count({ where: { status: 'pending' } }),
-      pendingKYC: await User.count({ where: { kycStatus: 'pending' } }).catch(() => 0),
-    };
+    const [totalUsers, totalAccounts, totalDeposits, totalWithdrawals, pendingDeposits, pendingWithdrawals, pendingKYC] =
+      await Promise.all([
+        User.count(),
+        Mt5Account.count(),
+        Deposit.sum('amount').then(v => v || 0),
+        Withdrawal.sum('amount').then(v => v || 0),
+        Deposit.count({ where: { status: 'pending' } }),
+        Withdrawal.count({ where: { status: 'pending' } }),
+        User.count({ where: { kycStatus: 'pending' } }).catch(() => 0),
+      ]);
+    const stats = { totalUsers, totalAccounts, totalDeposits, totalWithdrawals, pendingDeposits, pendingWithdrawals, pendingKYC };
     res.json(successResponse(stats, 'Dashboard stats retrieved'));
   } catch (error) {
     next(error);
@@ -90,4 +91,17 @@ export const getDashboardCharts = async (req, res, next) => {
   }
 };
 
-export default { getDashboardStats, getDashboardCharts };
+export const getMt5Totals = async (req, res, next) => {
+  try {
+    const [totalBalance, totalEquity, count] = await Promise.all([
+      Mt5Account.sum('balance').then(v => parseFloat(v) || 0),
+      Mt5Account.sum('equity').then(v => parseFloat(v) || 0),
+      Mt5Account.count({ where: { status: 'active' } }),
+    ]);
+    res.json(successResponse({ totalBalance, totalEquity, count }, 'MT5 totals retrieved'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export default { getDashboardStats, getDashboardCharts, getMt5Totals };

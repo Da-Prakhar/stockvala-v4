@@ -20,6 +20,10 @@ const ProfilePage = () => {
       phone: user?.phone || '',
       country: user?.country || '',
       city: user?.city || '',
+      bankName: user?.bankName || '',
+      accountNumber: user?.accountNumber || '',
+      ifscCode: user?.ifscCode || '',
+      accountHolderName: user?.accountHolderName || '',
     },
   })
   const { register: registerPwd, handleSubmit: handleSubmitPwd, formState: { errors: pwdErrors }, reset: resetPwd } = useForm()
@@ -38,6 +42,10 @@ const ProfilePage = () => {
         phone: data.phone,
         country: data.country,
         city: data.city,
+        bankName: data.bankName,
+        accountNumber: data.accountNumber,
+        ifscCode: data.ifscCode,
+        accountHolderName: data.accountHolderName,
       })
       // Update authStore user so the UI reflects changes immediately
       const updatedUser = res.data?.data || res.data
@@ -115,6 +123,30 @@ const ProfilePage = () => {
             label="City"
             {...register('city')}
           />
+
+          <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+              Bank Details
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Bank Name"
+                {...register('bankName')}
+              />
+              <Input
+                label="Account Holder Name"
+                {...register('accountHolderName')}
+              />
+              <Input
+                label="Account Number"
+                {...register('accountNumber')}
+              />
+              <Input
+                label="IFSC Code"
+                {...register('ifscCode')}
+              />
+            </div>
+          </div>
 
           <Button type="submit" variant="primary" loading={isSaving}>
             Save Changes
