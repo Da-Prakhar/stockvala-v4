@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useCompanyStore, getUploadUrl } from '../store/companyStore'
 import { Eye, EyeOff, ShieldCheck, RefreshCw } from 'lucide-react'
-import { LANDING_URL as LANDING_PAGE_URL } from '../utils/domainConfig'
+import { USER_CRM_URL as LANDING_PAGE_URL } from '../utils/domainConfig'
 
 // ── 6-digit OTP input ──────────────────────────────────────────────────────
 function OtpInput({ value, onChange }) {

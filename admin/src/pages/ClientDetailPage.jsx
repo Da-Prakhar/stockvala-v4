@@ -298,6 +298,15 @@ export default function ClientDetailPage() {
     )
   }
 
+  // Format amount — cent accounts use USC (US Dollar Cent) instead of USD
+  const fmtAmt = (amount, accountType) => {
+    if (accountType === 'cent') {
+      const n = Number(amount || 0)
+      return `${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USC`
+    }
+    return formatCurrency(amount, 'USD')
+  }
+
   // Build combined live data for display
   const allMt5Accounts = (client.mt5Accounts || []).map(acc => {
     const live = liveAccounts[acc.login] || {}
@@ -600,7 +609,7 @@ export default function ClientDetailPage() {
                       )}
                     </div>
                     <p className="text-sm text-dark-500 dark:text-dark-400 mt-1">
-                      Login: {account.login} {account.group ? `| Group: ${account.group}` : ''}
+                      {account.accountType === 'cent' ? 'Cent ID' : 'Login'}: {account.login} {account.group ? `| Group: ${account.group}` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -620,24 +629,24 @@ export default function ClientDetailPage() {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm mb-4">
                   <div>
                     <p className="text-dark-500 dark:text-dark-400">Balance</p>
-                    <p className="font-bold text-dark-900 dark:text-dark-50 text-lg">{formatCurrency(account.balance, 'USD')}</p>
+                    <p className="font-bold text-dark-900 dark:text-dark-50 text-lg">{fmtAmt(account.balance, account.accountType)}</p>
                   </div>
                   <div>
                     <p className="text-dark-500 dark:text-dark-400">Equity</p>
-                    <p className="font-bold text-dark-900 dark:text-dark-50 text-lg">{formatCurrency(account.equity, 'USD')}</p>
+                    <p className="font-bold text-dark-900 dark:text-dark-50 text-lg">{fmtAmt(account.equity, account.accountType)}</p>
                   </div>
                   <div>
                     <p className="text-dark-500 dark:text-dark-400">Margin</p>
-                    <p className="font-semibold text-dark-900 dark:text-dark-50">{formatCurrency(account.margin, 'USD')}</p>
+                    <p className="font-semibold text-dark-900 dark:text-dark-50">{fmtAmt(account.margin, account.accountType)}</p>
                   </div>
                   <div>
                     <p className="text-dark-500 dark:text-dark-400">Free Margin</p>
-                    <p className="font-semibold text-dark-900 dark:text-dark-50">{formatCurrency(account.freeMargin, 'USD')}</p>
+                    <p className="font-semibold text-dark-900 dark:text-dark-50">{fmtAmt(account.freeMargin, account.accountType)}</p>
                   </div>
                   <div>
                     <p className="text-dark-500 dark:text-dark-400">Open P&L ({accPositions.length})</p>
                     <p className={`font-bold text-lg ${accPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {accPnL >= 0 ? '+' : ''}{formatCurrency(accPnL, 'USD')}
+                      {accPnL >= 0 ? '+' : ''}{fmtAmt(accPnL, account.accountType)}
                     </p>
                   </div>
                 </div>

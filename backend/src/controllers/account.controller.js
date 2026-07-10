@@ -175,6 +175,13 @@ export const createAccount = async (req, res, next) => {
 
     console.log('[CreateAccount] User found:', user.firstName, user.lastName, user.email);
 
+    // ── Max 5 MT5 accounts per user ──────────────────────────────────────────
+    const totalAccounts = await Mt5Account.count({ where: { userId: req.user.id } });
+    if (totalAccounts >= 10) {
+      throw new BusinessError('You have reached the maximum of 10 MT5 accounts. Contact support to add more.');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // ── Broker permission checks ──────────────────────────────────────────────
     const perms = await getPermissions();
     if (accountType === 'demo' && !perms.allow_demo_accounts) {
@@ -182,16 +189,6 @@ export const createAccount = async (req, res, next) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // ── Guard against duplicate accounts of the same type/market ─────────────
-    const existingAccount = await Mt5Account.findOne({
-      where: { userId: req.user.id, accountType, market: market || 'forex_crypto' }
-    });
-    if (existingAccount) {
-      throw new BusinessError(
-        `You already have a ${accountType} account for ${market || 'this market'} (Login: ${existingAccount.mt5Login}). Contact support if you need another account.`
-      );
-    }
-    // ─────────────────────────────────────────────────────────────────────────
 
     // For copy_trading, validate the master exists
     let masterRecord = null;

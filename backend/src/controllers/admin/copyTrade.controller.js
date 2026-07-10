@@ -294,6 +294,9 @@ export const createMaster = async (req, res, next) => {
       }
     }
 
+    const existingMaster = await CopyTradeMaster.findOne({ where: { userId: uid } });
+    if (existingMaster) throw new BusinessError(`User already has a master account (ID: ${existingMaster.id}, status: ${existingMaster.status})`);
+
     const master = await CopyTradeMaster.create({
       userId: uid,
       mt5AccountId: accId,

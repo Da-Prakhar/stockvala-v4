@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Copy, Share2, TrendingUp, Users, DollarSign, BarChart3, ChevronLeft, ChevronRight, UserCheck, Clock } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card, { CardBody } from '../components/ui/Card'
-import { LANDING_URL } from '../utils/domainConfig'
+import { USER_CRM_URL } from '../utils/domainConfig'
 import Loader from '../components/ui/Loader'
 import { containerVariants, itemVariants } from '../utils/animations'
 import api from '../utils/api'
@@ -98,7 +98,7 @@ const IBPage = () => {
   }
 
   const referralCode = ibData?.referralCode || ibData?.ibCode || 'N/A'
-  const referralLink = ibData?.referralLink || `${LANDING_URL}/register?ref=${referralCode}`
+  const referralLink = ibData?.referralLink || `${USER_CRM_URL}/register?ref=${referralCode}`
 
   const statCards = [
     { label: 'Total Referrals', value: stats?.totalReferrals || 0, icon: Users, color: 'text-blue-500' },

@@ -435,7 +435,7 @@ const defaultFollowerSettings = () => ({
   equityPctMax:        100,
   allowMaxLotPerTrade: true,
   maxLotPerTradeMax:   50.0,
-  maxFollowersPerUser: 5,
+  maxFollowersPerUser: 1,
   defaultCopyRatio:    1.0,
 });
 
@@ -538,11 +538,11 @@ export const followMaster = async (req, res, next) => {
     if (master.status !== 'approved') throw new BusinessError('This master is not available for copying');
     if (master.userId === req.user.id) throw new BusinessError('Cannot follow yourself');
 
-    // Check if already following
-    const existing = await CopyTradeFollower.findOne({
-      where: { masterId, followerUserId: req.user.id, status: 'active' }
+    // Check if user already has any subscription for this master (any status)
+    const existingAny = await CopyTradeFollower.findOne({
+      where: { masterId, followerUserId: req.user.id }
     });
-    if (existing) throw new ConflictError('Already following this master');
+    if (existingAny?.status === 'active') throw new ConflictError('Already following this master');
 
     // Check platform-level max followers per master
     const platformMaxFollowers = perms.copy_max_followers_per_master;
@@ -557,16 +557,6 @@ export const followMaster = async (req, res, next) => {
     if (master.maxFollowers > 0) {
       const currentFollowers = await CopyTradeFollower.count({ where: { masterId, status: 'active' } });
       if (currentFollowers >= master.maxFollowers) throw new BusinessError('This master has reached maximum followers');
-    }
-
-    // Check max followers per user
-    const effectiveSettings = { ...defaultFollowerSettings(), ...(master.followerSettings || {}) };
-    const perUserMax = effectiveSettings.maxFollowersPerUser || 5;
-    const userActiveCount = await CopyTradeFollower.count({
-      where: { masterId, followerUserId: req.user.id, status: 'active' }
-    });
-    if (userActiveCount >= perUserMax) {
-      throw new BusinessError(`You can follow this master with at most ${perUserMax} account(s)`);
     }
 
     // Check min investment
@@ -589,6 +579,11 @@ export const followMaster = async (req, res, next) => {
     } else {
       const acc = await Mt5Account.findOne({ where: { id: followerAccId, userId: req.user.id } });
       if (!acc) throw new BusinessError('MT5 account not found or does not belong to you');
+    }
+
+    // Prevent switching MT5 accounts: if user has any prior subscription, they must use the same account
+    if (existingAny && existingAny.followerMt5AccountId !== followerAccId) {
+      throw new ConflictError('You must use the same MT5 account to re-follow this master');
     }
 
     // Reactivate stopped subscription if exists
