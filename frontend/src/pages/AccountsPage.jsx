@@ -187,6 +187,10 @@ const AccountsPage = () => {
   const getTypeLabel = (type) => ACCOUNT_TYPE_CONFIG[type]?.label || type
   const getTypeColors = (type) => TYPE_COLORS[type] || TYPE_COLORS.live
   const getMarketLabel = (m) => ({ forex: 'Forex', forex_crypto: 'Forex', comex: 'Comex', mcx: 'MCX', nse: 'NSE', mcx_nse: 'MCX+NSE' }[m] || m || 'Forex')
+  const fmtAmt = (amount, type) => {
+    const n = Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return type === 'cent' ? `${n} USC` : `$${n}`
+  }
 
   return (
     <motion.div
@@ -401,13 +405,13 @@ const AccountsPage = () => {
                     <div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">Balance</p>
                       <p className="text-base font-semibold text-slate-900 dark:text-white">
-                        ${account.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {fmtAmt(account.balance, account.type)}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">Equity</p>
                       <p className="text-base font-semibold text-slate-900 dark:text-white">
-                        ${account.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {fmtAmt(account.equity, account.type)}
                       </p>
                     </div>
                   </div>
@@ -477,25 +481,25 @@ const AccountsPage = () => {
               <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Balance</p>
                 <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                  ${selectedAccount.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {fmtAmt(selectedAccount.balance, selectedAccount.type)}
                 </p>
               </div>
               <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Equity</p>
                 <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                  ${selectedAccount.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {fmtAmt(selectedAccount.equity, selectedAccount.type)}
                 </p>
               </div>
               <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Margin</p>
                 <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                  ${(selectedAccount.margin || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {fmtAmt(selectedAccount.margin || 0, selectedAccount.type)}
                 </p>
               </div>
               <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Free Margin</p>
                 <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                  ${(selectedAccount.freeMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {fmtAmt(selectedAccount.freeMargin || 0, selectedAccount.type)}
                 </p>
               </div>
             </div>
